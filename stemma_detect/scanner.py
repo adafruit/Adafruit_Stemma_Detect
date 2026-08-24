@@ -13,6 +13,10 @@ class Detection:
     address: int
     result: ProbeResult
 
+    @property
+    def name(self) -> str:
+        return self.result.name or self.chip.name
+
 
 def scan(
     bus: I2CBus,

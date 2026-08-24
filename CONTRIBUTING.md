@@ -26,7 +26,6 @@ Add one module to `stemma_detect/chips/`. It must define:
 - `PACKAGE`: an `adafruit-circuitpython-*` distribution;
 - `PROBE_CONFIDENCE`: the strongest result the probe can return;
 - `probe(bus, address)`: returns a `ProbeResult`;
-- optionally `PRODUCT_URL`: the Adafruit product page.
 
 Probes must not import the driver they install. Prefer documented, read-only identity registers or commands. Avoid reset, calibration, configuration, measurement, or other state-changing operations. When a device cannot be identified safely, return `ProbeResult.possible()` rather than a definitive match.
 

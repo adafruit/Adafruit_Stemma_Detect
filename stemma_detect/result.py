@@ -15,6 +15,7 @@ class Confidence(IntEnum):
 class ProbeResult:
     confidence: Confidence
     evidence: Mapping[str, str] = field(default_factory=dict)
+    name: str | None = None
 
     @classmethod
     def no_match(cls, evidence: Mapping[str, str] | None = None) -> ProbeResult:
@@ -25,5 +26,10 @@ class ProbeResult:
         return cls(Confidence.POSSIBLE, evidence or {})
 
     @classmethod
-    def match(cls, evidence: Mapping[str, str] | None = None) -> ProbeResult:
-        return cls(Confidence.MATCH, evidence or {})
+    def match(
+        cls,
+        evidence: Mapping[str, str] | None = None,
+        *,
+        name: str | None = None,
+    ) -> ProbeResult:
+        return cls(Confidence.MATCH, evidence or {}, name)

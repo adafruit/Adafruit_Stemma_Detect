@@ -21,7 +21,6 @@ class Chip:
     package: str
     probe: Callable[[I2CBus, int], ProbeResult]
     probe_confidence: Confidence
-    product_url: str | None = None
 
 
 def _load_chip(module: ModuleType) -> Chip:
@@ -30,7 +29,6 @@ def _load_chip(module: ModuleType) -> Chip:
     package = module.PACKAGE
     probe = module.probe
     probe_confidence = module.PROBE_CONFIDENCE
-    product_url = getattr(module, "PRODUCT_URL", None)
 
     if not addresses or any(not 0x08 <= address <= 0x77 for address in addresses):
         raise ValueError(f"{name}: invalid I2C address list")
@@ -41,7 +39,7 @@ def _load_chip(module: ModuleType) -> Chip:
     if probe_confidence not in (Confidence.POSSIBLE, Confidence.MATCH):
         raise ValueError(f"{name}: invalid probe confidence")
 
-    return Chip(name, addresses, package, probe, probe_confidence, product_url)
+    return Chip(name, addresses, package, probe, probe_confidence)
 
 
 def discover_chips() -> tuple[Chip, ...]:

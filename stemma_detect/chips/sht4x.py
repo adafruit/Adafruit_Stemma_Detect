@@ -3,7 +3,6 @@ from stemma_detect.result import Confidence, ProbeResult
 ADDRESSES = (0x44,)
 PACKAGE = "adafruit-circuitpython-sht4x"
 PROBE_CONFIDENCE = Confidence.MATCH
-PRODUCT_URL = "https://www.adafruit.com/product/4885"
 
 
 def _crc8(data):

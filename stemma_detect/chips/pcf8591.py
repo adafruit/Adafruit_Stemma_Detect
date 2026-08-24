@@ -3,7 +3,6 @@ from stemma_detect.result import Confidence, ProbeResult
 ADDRESSES = tuple(range(0x48, 0x50))
 PACKAGE = "adafruit-circuitpython-pcf8591"
 PROBE_CONFIDENCE = Confidence.POSSIBLE
-PRODUCT_URL = "https://www.adafruit.com/product/4648"
 
 
 def probe(bus, address):

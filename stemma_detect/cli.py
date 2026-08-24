@@ -41,7 +41,7 @@ def _installed_version(package: str) -> str | None:
 
 
 def _confirm_possible(detection: Detection) -> bool:
-    prompt = f"Is the device at 0x{detection.address:02X} a {detection.chip.name}?"
+    prompt = f"Is the device at 0x{detection.address:02X} a {detection.name}?"
     try:
         return SHELL.prompt(prompt, default="n")
     except (EOFError, KeyboardInterrupt):
@@ -87,15 +87,12 @@ def main() -> int:
 
     for detection in detections:
         label = "MATCH" if detection.result.confidence is Confidence.MATCH else "POSSIBLE"
-        print(f"{label}: {detection.chip.name} at 0x{detection.address:02X}")
+        print(f"{label}: {detection.name} at 0x{detection.address:02X}")
         if detection.result.evidence:
             evidence = ", ".join(
                 f"{key}={value}" for key, value in detection.result.evidence.items()
             )
             print(f"  {evidence}")
-        if detection.chip.product_url:
-            print(f"  product: {detection.chip.product_url}")
-
         installed = _installed_version(detection.chip.package)
         if installed:
             print(f"  driver: {detection.chip.package} {installed} (installed)")

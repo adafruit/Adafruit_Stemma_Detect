@@ -2,10 +2,26 @@ import unittest
 
 from stemma_detect.catalog import Chip
 from stemma_detect.result import Confidence, ProbeResult
-from stemma_detect.scanner import scan
+from stemma_detect.scanner import Detection, scan
 
 
 class ScannerTests(unittest.TestCase):
+    def test_detection_uses_probe_name_override(self):
+        chip = Chip(
+            name="bmp3xx",
+            addresses=(0x77,),
+            package="adafruit-circuitpython-bmp3xx",
+            probe=lambda _bus, _address: ProbeResult.no_match(),
+            probe_confidence=Confidence.MATCH,
+        )
+        detection = Detection(
+            chip,
+            0x77,
+            ProbeResult.match(name="bmp390"),
+        )
+
+        self.assertEqual(detection.name, "bmp390")
+
     def test_non_matches_are_discarded(self):
         chip = Chip(
             name="no-match",
