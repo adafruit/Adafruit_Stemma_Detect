@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adafruit-stemma-detect"
+version = "0.1.0"
+description = "Detect supported Adafruit STEMMA QT sensors and install their CircuitPython drivers"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "Adafruit-Python-Shell>=1.14.0",
+    "smbus2>=0.4",
+]
+authors = [
+    {name = "Adafruit Industries", email = "circuitpython@adafruit.com"},
+]
+license = "MIT"
+keywords = [
+    "adafruit",
+    "blinka",
+    "circuitpython",
+    "i2c",
+    "raspberry-pi",
+    "stemma-qt",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Hardware",
+]
+
+[project.urls]
+Homepage = "https://github.com/makermelissa/Adafruit_Stemma_Detect"
+Documentation = "https://adafruit-stemma-detect.readthedocs.io/"
+Issues = "https://github.com/makermelissa/Adafruit_Stemma_Detect/issues"
+Source = "https://github.com/makermelissa/Adafruit_Stemma_Detect"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2",
+    "pre-commit>=4",
+    "ruff>=0.11",
+    "twine>=6",
+]
+docs = [
+    "Sphinx>=7",
+    "sphinx-rtd-theme>=3",
+]
+
+[project.scripts]
+stemma-scan = "stemma_detect.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["stemma_detect*"]
