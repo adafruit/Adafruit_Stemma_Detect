@@ -1,5 +1,3 @@
-# Adafruit STEMMA Detect
-
 Introduction
 ============
 
