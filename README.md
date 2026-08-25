@@ -1,7 +1,25 @@
 # Adafruit STEMMA Detect
 
-Detect selected Adafruit STEMMA QT sensors on a Raspberry Pi and optionally install their CircuitPython drivers.
+Introduction
+============
 
+.. image:: https://readthedocs.org/projects/adafruit-stemma-detect/badge/?version=latest
+    :target: https://circuitpython.readthedocs.io/projects/stemma-detect/en/latest/
+    :alt: Documentation Status
+
+.. image:: https://img.shields.io/discord/327254708534116352.svg
+    :target: https://adafru.it/discord
+    :alt: Discord
+
+.. image:: https://github.com/adafruit/Adafruit_Stemma_Detect/workflows/Build%20CI/badge.svg
+    :target: https://github.com/adafruit/Adafruit_Stemma_Detect/actions
+    :alt: Build Status
+
+.. image:: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
+    :target: https://github.com/astral-sh/ruff
+    :alt: Code Style: Ruff
+
+Detect selected Adafruit STEMMA QT sensors on a Raspberry Pi and optionally install their CircuitPython drivers.
 This project is currently an alpha proof of concept. It recognizes only sensors with bundled probe modules; it is not a universal I²C device identifier.
 
 Each sensor definition contains only:
@@ -13,7 +31,40 @@ Each sensor definition contains only:
 
 The scanner uses `smbus2` for I²C access and Adafruit Python Shell for prompts and streaming installation commands. Individual CircuitPython drivers are imported neither by the scanner nor by chip definitions.
 
-## Run from a checkout
+Dependencies
+=============
+This driver depends on:
+
+* `Adafruit Python Shell <https://github.com/adafruit/Adafruit_Python_Shell>`_
+
+
+Installing from PyPI
+=====================
+
+On supported GNU/Linux systems like the Raspberry Pi, you can install the driver locally `from
+PyPI <https://pypi.org/project/adafruit-stemma-detect/>`_. To install for current user:
+
+.. code-block:: shell
+
+    pip3 install adafruit-stemma-detect
+
+To install system-wide (this may be required in some cases):
+
+.. code-block:: shell
+
+    sudo pip3 install adafruit-stemma-detect
+
+To install in a virtual environment in your current project:
+
+.. code-block:: shell
+
+    mkdir project-name && cd project-name
+    python3 -m venv .env
+    source .env/bin/activate
+    pip3 install adafruit-stemma-detect
+
+Running from a checkout
+=======================
 
 ```sh
 python3 -m venv --system-site-packages .venv
@@ -39,7 +90,8 @@ Possible matches default to “no.” This is important because several unrelate
 
 The complete scan finishes before any prompts are shown. Definitive-capable probes run before possible-only probes at each address. A definitive match claims its I²C address immediately, so possible-only candidates are neither probed nor presented. If no definitive probe matches, the possible candidates are collected. A declined candidate is removed from the results; once one is confirmed, it is retained and all remaining candidates at that address are removed without further prompts.
 
-## Supported sensors so far
+Supported sensors so far
+========================
 
 - AHT20 (possible match only)
 - ADT7410
@@ -82,7 +134,8 @@ The complete scan finishes before any prompts are shown. Definitive-capable prob
 - VL53L1X
 - VL6180X
 
-## Add a sensor
+Adding a sensor
+===============
 
 Add one module under `stemma_detect/chips/`. Modules are discovered automatically, so no registry edit is needed.
 
@@ -103,7 +156,8 @@ Keep probes short, non-destructive, and independent of the package they are inte
 Family probes may pass `name` to `ProbeResult.match()` when an identity register distinguishes a
 specific chip. Ambiguous IDs should remain at the family level.
 
-## Development
+Development
+===========
 
 ```sh
 python3 -m unittest discover -s tests -v
@@ -111,8 +165,14 @@ ruff check .
 ruff format --check .
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before adding a sensor or opening a pull request.
+Contributing
+============
 
-## License
+Contributions are welcome! Please read our `Code of Conduct
+<https://github.com/adafruit/Adafruit_Stemma_Detect/blob/master/CODE_OF_CONDUCT.md>`_
+before contributing to help this project stay welcoming
+
+License
+=======
 
 MIT, see [LICENSE](LICENSE).
