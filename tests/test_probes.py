@@ -2,12 +2,14 @@ import importlib
 import unittest
 
 from stemma_detect.chips import (
+    _possible,
     apds9960,
     bme280,
     bmp280,
     lis3dh,
     ltr390,
     mcp9808,
+    mpu6050,
     pcf8591,
     sht4x,
     vcnl4040,
@@ -42,6 +44,16 @@ class RegisterBus:
 
 
 class ProbeTests(unittest.TestCase):
+    def test_address_only_probe_is_never_definitive(self):
+        result = _possible.address_read_probe(FakeBus(b"\x5a"), 0x44)
+
+        self.assertIs(result.confidence, Confidence.POSSIBLE)
+        self.assertEqual(result.evidence, {"response": "0x5A"})
+
+    def test_mpu6050_id(self):
+        self.assertIs(mpu6050.probe(FakeBus(b"\x68"), 0x68).confidence, Confidence.MATCH)
+        self.assertIs(mpu6050.probe(FakeBus(b"\x00"), 0x68).confidence, Confidence.NO_MATCH)
+
     def test_family_ids_refine_specific_names(self):
         cases = (
             ("bmp3xx", FakeBus(b"\x60"), 0x77, "bmp390"),
@@ -76,6 +88,7 @@ class ProbeTests(unittest.TestCase):
     def test_additional_fixed_ids(self):
         cases = (
             ("adt7410", 0x48, b"\xcb"),
+            ("apds9999", 0x39, b"\xc2"),
             ("as7341", 0x39, b"\x24"),
             ("bme680", 0x77, b"\x61"),
             ("bmp3xx", 0x77, b"\x50"),
@@ -99,6 +112,7 @@ class ProbeTests(unittest.TestCase):
             ("tmp117", 0x48, b"\x01\x17"),
             ("tsl2591", 0x29, b"\x50"),
             ("vl53l1x", 0x29, b"\xea\xcc\x10"),
+            ("vl53l4cd", 0x29, b"\xeb\xaa"),
         )
         for name, address, response in cases:
             module = importlib.import_module(f"stemma_detect.chips.{name}")
@@ -133,6 +147,14 @@ class ProbeTests(unittest.TestCase):
     def test_ltr390_id(self):
         self.assertIs(ltr390.probe(FakeBus(b"\xb2"), 0x53).confidence, Confidence.MATCH)
         self.assertIs(ltr390.probe(FakeBus(b"\x00"), 0x53).confidence, Confidence.NO_MATCH)
+
+    def test_ltr329_ltr303_ids(self):
+        module = importlib.import_module("stemma_detect.chips.ltr329_ltr303")
+        matched = RegisterBus({0x86: b"\xa0", 0x87: b"\x05"})
+        wrong = RegisterBus({0x86: b"\xa0", 0x87: b"\x00"})
+
+        self.assertIs(module.probe(matched, 0x29).confidence, Confidence.MATCH)
+        self.assertIs(module.probe(wrong, 0x29).confidence, Confidence.NO_MATCH)
 
     def test_mcp9808_ids(self):
         matched = RegisterBus({0x06: b"\x00\x54", 0x07: b"\x04\x01"})

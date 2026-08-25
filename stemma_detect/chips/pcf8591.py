@@ -1,6 +1,7 @@
 from stemma_detect.result import Confidence, ProbeResult
 
 ADDRESSES = tuple(range(0x48, 0x50))
+DEFAULT_ADDRESSES = (0x48,)
 PACKAGE = "adafruit-circuitpython-pcf8591"
 PROBE_CONFIDENCE = Confidence.POSSIBLE
 

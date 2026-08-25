@@ -1,8 +1,9 @@
-from stemma_detect.result import Confidence, ProbeResult
+from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
 
 ADDRESSES = (0x44,)
 PACKAGE = "adafruit-circuitpython-sht4x"
 PROBE_CONFIDENCE = Confidence.MATCH
+PROBE_RISK = ProbeRisk.COMMAND
 
 
 def _crc8(data):

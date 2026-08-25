@@ -1,8 +1,9 @@
-from stemma_detect.result import Confidence, ProbeResult
+from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
 
 ADDRESSES = (0x29,)
 PACKAGE = "adafruit-circuitpython-vl6180x"
 PROBE_CONFIDENCE = Confidence.MATCH
+PROBE_RISK = ProbeRisk.COMMAND
 
 
 def probe(bus, address):

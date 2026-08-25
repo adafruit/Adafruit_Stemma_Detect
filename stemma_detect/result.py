@@ -11,6 +11,14 @@ class Confidence(IntEnum):
     MATCH = 2
 
 
+class ProbeRisk(IntEnum):
+    """Relative chance that a probe write is meaningful to the wrong device."""
+
+    PASSIVE = 0
+    REGISTER = 1
+    COMMAND = 2
+
+
 @dataclass(frozen=True)
 class ProbeResult:
     confidence: Confidence
