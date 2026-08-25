@@ -22,14 +22,14 @@ This project is currently an alpha proof of concept. It recognizes only sensors 
 
 Each sensor definition contains only:
 
-- `ADDRESSES`
-- `DEFAULT_ADDRESSES` (optional for configurable-address sensors)
-- `PACKAGE`
-- `PROBE_CONFIDENCE`
-- `PROBE_RISK` (optional for probes that send multi-byte addresses or commands)
-- `probe(bus, address)`
+- ``ADDRESSES``
+- ``DEFAULT_ADDRESSES`` (optional for configurable-address sensors)
+- ``PACKAGE``
+- ``PROBE_CONFIDENCE``
+- ``PROBE_RISK`` (optional for probes that send multi-byte addresses or commands)
+- ``probe(bus, address)``
 
-The scanner uses `smbus2` for I²C access and Adafruit Python Shell for prompts and streaming installation commands. Individual CircuitPython drivers are imported neither by the scanner nor by chip definitions.
+The scanner uses ``smbus2`` for I²C access and Adafruit Python Shell for prompts and streaming installation commands. Individual CircuitPython drivers are imported neither by the scanner nor by chip definitions.
 
 Dependencies
 =============
@@ -66,25 +66,25 @@ To install in a virtual environment in your current project:
 Running from a checkout
 =======================
 
-```sh
-python3 -m venv --system-site-packages .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/stemma-scan --bus 1
-```
+.. code-block:: shell
 
-Use `--install` to install drivers for definitive matches:
+    python3 -m venv --system-site-packages .venv
+    .venv/bin/python -m pip install -e .
+    .venv/bin/stemma-scan --bus 1
 
-```sh
-.venv/bin/stemma-scan --bus 1 --install
-```
+Use ``--install`` to install drivers for definitive matches:
+
+.. code-block:: shell
+
+    .venv/bin/stemma-scan --bus 1 --install
 
 Address-only or otherwise ambiguous results are reported but not installed.
 
 To be prompted before installing a driver for each possible match, use:
 
-```sh
-.venv/bin/stemma-scan --bus 1 --install --prompt-possible-matches
-```
+.. code-block:: shell
+
+    .venv/bin/stemma-scan --bus 1 --install --prompt-possible-matches
 
 Possible matches default to “no.” This is important because several unrelated devices can share the same I²C address.
 
@@ -99,9 +99,9 @@ Diagnostics
 Use ``--diagnostics`` to show every probe attempted, including its safety category, non-matches,
 and I²C errors that are hidden during a normal scan:
 
-```sh
-.venv/bin/stemma-scan --bus 1 --diagnostics
-```
+.. code-block:: shell
+
+    .venv/bin/stemma-scan --bus 1 --diagnostics
 
 An address that does not acknowledge an I²C transaction is reported as ``NOT DETECTED``. The
 ``ERROR`` label is reserved for unexpected failures. Successful transactions include their raw
@@ -136,39 +136,40 @@ VCNL4020, VCNL4030, VCNL4200, and VEML7700.
 Adding a sensor
 ===============
 
-Add one module under `stemma_detect/chips/`. Modules are discovered automatically, so no registry edit is needed.
+Add one module under ``stemma_detect/chips/``. Modules are discovered automatically, so no registry edit is needed.
 
-```python
-from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
+.. code-block:: python
 
-ADDRESSES = (0x44,)
-DEFAULT_ADDRESSES = (0x44,)  # Optional; single addresses are defaults automatically.
-PACKAGE = "adafruit-circuitpython-example"
-PROBE_CONFIDENCE = Confidence.MATCH
-PROBE_RISK = ProbeRisk.COMMAND  # Only needed for command or multi-byte-address probes.
+    from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
 
+    ADDRESSES = (0x44,)
+    DEFAULT_ADDRESSES = (0x44,)  # Optional; single addresses are defaults automatically.
+    PACKAGE = "adafruit-circuitpython-example"
+    PROBE_CONFIDENCE = Confidence.MATCH
+    PROBE_RISK = ProbeRisk.COMMAND  # Only for commands or multi-byte addresses.
 
-def probe(bus, address):
-    value = bus.read_register(address, 0x00, 1)
-    return ProbeResult.match({"id": value.hex()}) if value == b"\x12" else ProbeResult.no_match()
-```
+    def probe(bus, address):
+        value = bus.read_register(address, 0x00, 1)
+        if value == b"\x12":
+            return ProbeResult.match({"id": value.hex()})
+        return ProbeResult.no_match()
 
 Keep probes short, non-destructive, and independent of the package they are intended to install.
 Most identity-register probes should omit ``PROBE_RISK`` and use the default register category.
 Address-only definitions automatically use the passive category. Set ``ProbeRisk.COMMAND`` when a
 probe transmits a command or a multi-byte register address that another chip could interpret as a
 write.
-Family probes may pass `name` to `ProbeResult.match()` when an identity register distinguishes a
+Family probes may pass ``name`` to ``ProbeResult.match()`` when an identity register distinguishes a
 specific chip. Ambiguous IDs should remain at the family level.
 
 Development
 ===========
 
-```sh
-python3 -m unittest discover -s tests -v
-ruff check .
-ruff format --check .
-```
+.. code-block:: shell
+
+    python3 -m unittest discover -s tests -v
+    ruff check .
+    ruff format --check .
 
 Contributing
 ============
@@ -180,4 +181,4 @@ before contributing to help this project stay welcoming
 License
 =======
 
-MIT, see [LICENSE](LICENSE).
+MIT, see `LICENSE <LICENSE>`_.
