@@ -338,6 +338,84 @@ class ProbeTests(unittest.TestCase):
         invalid = module.probe(RegisterBus({0x0D: b"\x01", 0x0E: b"\x00\x00"}), 0x35)
         self.assertIs(invalid.confidence, Confidence.NO_MATCH)
 
+    def test_new_fixed_identity_devices(self):
+        cases = (
+            ("aw9523", FakeBus(b"\x23"), 0x58),
+            ("cap1188", FakeBus(b"\x50\x5d\x83"), 0x29),
+        )
+        for name, bus, address in cases:
+            module = importlib.import_module(f"stemma_detect.chips.{name}")
+            with self.subTest(name=name):
+                result = module.probe(bus, address)
+                self.assertIs(result.confidence, Confidence.MATCH)
+                self.assertEqual((result.score, result.max_score), (result.max_score,) * 2)
+
+                wrong = module.probe(FakeBus(bytes(len(bus.response))), address)
+                self.assertIs(wrong.confidence, Confidence.NO_MATCH)
+
+    def test_drv2605_family_id_refines_variant(self):
+        module = importlib.import_module("stemma_detect.chips.drv2605")
+
+        for status, name in ((0x60, "drv2605"), (0xE0, "drv2605l")):
+            with self.subTest(status=status):
+                result = module.probe(FakeBus(bytes((status,))), 0x5A)
+                self.assertIs(result.confidence, Confidence.MATCH)
+                self.assertEqual(result.name, name)
+
+        self.assertIs(
+            module.probe(FakeBus(b"\x00"), 0x5A).confidence,
+            Confidence.NO_MATCH,
+        )
+
+    def test_cst8xx_multi_register_identity_refines_variant(self):
+        module = importlib.import_module("stemma_detect.chips.cst8xx")
+
+        cst816s = module.probe(FakeBus(b"\x12\xb4\x01\x02\x00\x00"), 0x15)
+        self.assertIs(cst816s.confidence, Confidence.MATCH)
+        self.assertEqual(cst816s.name, "cst816s")
+
+        cst826 = module.probe(FakeBus(b"\x12\x00\x01\x02\x00\x11"), 0x15)
+        self.assertIs(cst826.confidence, Confidence.MATCH)
+        self.assertEqual(cst826.name, "cst826")
+
+        generic = module.probe(FakeBus(b"\x12\x00\x01\x02\x00\x00"), 0x15)
+        self.assertIs(generic.confidence, Confidence.MATCH)
+        self.assertIsNone(generic.name)
+
+        invalid = module.probe(FakeBus(bytes(6)), 0x15)
+        self.assertIs(invalid.confidence, Confidence.NO_MATCH)
+
+    def test_seesaw_hardware_and_firmware_identity(self):
+        module = importlib.import_module("stemma_detect.chips.seesaw")
+        version = (5690 << 16) | 0x0102
+        matched = CommandBus(
+            {
+                b"\x00\x01": b"\x88",
+                b"\x00\x02": version.to_bytes(4, "big"),
+            }
+        )
+
+        result = module.probe(matched, 0x49)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.name, "attiny1616_seesaw")
+        self.assertEqual(result.evidence["product_id"], "5690")
+
+        unknown_product = CommandBus(
+            {
+                b"\x00\x01": b"\x55",
+                b"\x00\x02": ((1234 << 16) | 1).to_bytes(4, "big"),
+            }
+        )
+        self.assertIsNone(module.probe(unknown_product, 0x49).name)
+
+        blank_version = CommandBus(
+            {b"\x00\x01": b"\x88", b"\x00\x02": bytes(4)}
+        )
+        self.assertIs(
+            module.probe(blank_version, 0x49).confidence,
+            Confidence.NO_MATCH,
+        )
+
     def test_vcnl401x_shared_id_stays_possible_across_drivers(self):
         for name in ("vcnl4010", "vcnl4020"):
             module = importlib.import_module(f"stemma_detect.chips.{name}")

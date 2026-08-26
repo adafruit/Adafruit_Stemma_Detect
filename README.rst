@@ -199,18 +199,19 @@ Raspberry Pi users should also consult Adafruit's `I²C clock stretching guide
 Supported sensors so far
 ========================
 
-The catalog currently contains 117 sensor definitions: 84 with definitive-capable probes and 33 that
+The catalog currently contains 122 device definitions: 89 with definitive-capable probes and 33 that
 produce possible matches. Possible matches are never installed without
 ``--prompt-possible-matches`` and user confirmation.
 
-Sensors with definitive probes include ADT7410, AGS02MA, AM2320, APDS9960, APDS9999, AS7341,
-AS7343, BME280, BME680, BMP280, BMP3xx, BMP5xx, BNO055, CCS811, DPS310, ENS160,
+Devices with definitive probes include ADT7410, AGS02MA, AM2320, APDS9960, APDS9999, AS7341,
+AS7343, AW9523, BME280, BME680, BMP280, BMP3xx, BMP5xx, BNO055, CAP1188, CCS811,
+CST8xx, DPS310, DRV2605/DRV2605L, ENS160,
 FXAS21002C, FXOS8700, GUVX I2C, HDC302x, HTS221, HTU21D, ICM20x, INA228,
 INA237/INA238, INA260, INA3221, LC709203F, LIS2MDL, LIS331, LIS3DH, LIS3MDL, LPS2x,
 LPS28, L3GD20, LSM303DLH magnetometer, LSM6DS, LSM9DS0, LSM9DS1, LTR329/LTR303,
 LTR390, MAX1704x, MCP9600, MCP9808, MLX90614, MLX90632, MMA8451, MMC5603,
 MPL3115A2, MPU6050, MSA301, OPT4048, PMSA003I, QMC5883P, SCD30, SCD4x, SEN6x,
-SGP30, SGP40, SGP41, SHT31D, SHT4x, SHTC3, SI1145, Si7021, SPA06-003, STCC4,
+Seesaw, SGP30, SGP40, SGP41, SHT31D, SHT4x, SHTC3, SI1145, Si7021, SPA06-003, STCC4,
 STHS34PF80, TCS3430, TCS34725, TMAG5273, TMP006, TMP007, TMP117/TMP119, TSL2561,
 TSL2591, VCNL4030, VCNL4040, VCNL4200, VEML6075, VL53L0X, VL53L1X, VL53L4CD,
 and VL6180X.
