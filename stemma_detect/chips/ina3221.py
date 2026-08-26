@@ -1,25 +1,18 @@
 from stemma_detect.result import Confidence
 from stemma_detect.signature import DeviceSignature, exact
 
-ADDRESSES = tuple(range(0x18, 0x20))
-DEFAULT_ADDRESSES = (0x18,)
-PACKAGE = "adafruit-circuitpython-mcp9808"
+ADDRESSES = tuple(range(0x40, 0x44))
+DEFAULT_ADDRESSES = (0x40,)
+PACKAGE = "adafruit-circuitpython-ina3221"
 PROBE_CONFIDENCE = Confidence.MATCH
 
 SIGNATURE = DeviceSignature(
     (
-        exact(
-            "device_id_revision",
-            0x07,
-            b"\x04\x00",
-            mask=b"\xff\x00",
-            show_value=True,
-            weight=10,
-        ),
+        exact("die_id", 0xFF, b"\x32\x20", show_value=True, weight=10),
         exact(
             "manufacturer_id",
-            0x06,
-            b"\x00\x54",
+            0xFE,
+            b"\x54\x49",
             show_value=True,
             required=False,
             weight=7,

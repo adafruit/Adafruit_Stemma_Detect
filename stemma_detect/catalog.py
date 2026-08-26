@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from types import ModuleType
 
 from . import chips
-from .bus import I2CBus
+from .bus import I2CBusProtocol
 from .result import Confidence, ProbeResult, ProbeRisk
 
 PACKAGE_PATTERN = re.compile(r"^adafruit-circuitpython-[a-z0-9][a-z0-9-]*$")
@@ -19,7 +19,7 @@ class Chip:
     name: str
     addresses: tuple[int, ...]
     package: str
-    probe: Callable[[I2CBus, int], ProbeResult]
+    probe: Callable[[I2CBusProtocol, int], ProbeResult]
     probe_confidence: Confidence
     default_addresses: tuple[int, ...] = ()
     probe_risk: ProbeRisk = ProbeRisk.REGISTER

@@ -10,4 +10,8 @@ def probe(bus, address):
     # The PCF8591 has no identity register. A successful read confirms only
     # that something responded at one of its possible addresses.
     value = bus.read(address, 1)[0]
-    return ProbeResult.possible({"conversion": f"0x{value:02X}"})
+    return ProbeResult.possible(
+        {"conversion": f"0x{value:02X}"},
+        score=1,
+        max_score=1,
+    )

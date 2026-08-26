@@ -236,6 +236,27 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(diagnostics[0].outcome, "not_detected")
         self.assertTrue(diagnostics[0].not_detected)
 
+    def test_default_address_adds_a_small_score_bonus(self):
+        chip = Chip(
+            "scored",
+            (0x48, 0x49),
+            "adafruit-circuitpython-scored",
+            lambda _bus, _address: ProbeResult.possible(score=5, max_score=10),
+            Confidence.POSSIBLE,
+            default_addresses=(0x48,),
+        )
+
+        detections = scan(object(), (chip,))
+
+        self.assertEqual(
+            [(item.address, item.result.score, item.result.max_score) for item in detections],
+            [(0x48, 6, 11), (0x49, 5, 11)],
+        )
+        self.assertEqual(
+            [item.result.evidence["address"] for item in detections],
+            ["default", "alternate"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

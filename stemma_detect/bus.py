@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -12,6 +13,25 @@ class I2CTransaction:
     address: int
     write: bytes | None = None
     read: bytes | None = None
+
+
+class I2CBusProtocol(Protocol):
+    """Minimal bus operations used by probes and topology adapters."""
+
+    def write_then_read(
+        self,
+        address: int,
+        write: bytes,
+        read_length: int,
+        *,
+        delay_ms: float = 0,
+    ) -> bytes: ...
+
+    def read(self, address: int, length: int) -> bytes: ...
+
+    def write(self, address: int, data: bytes) -> None: ...
+
+    def read_register(self, address: int, register: int, length: int) -> bytes: ...
 
 
 class I2CBus:

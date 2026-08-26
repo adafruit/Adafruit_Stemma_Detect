@@ -12,6 +12,7 @@ from stemma_detect.cli import (
     _print_transaction,
     _refine_possible_matches,
 )
+from stemma_detect.mux import MuxHop
 from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
 from stemma_detect.scanner import Detection, ProbeDiagnostic
 
@@ -72,7 +73,7 @@ class CliTests(unittest.TestCase):
             _confirm_possible(detection)
 
         prompt.assert_called_once_with(
-            "Is the device at 0x48 (default address) a ranked-chip?",
+            "Is the device at 0x48 (default address) a RANKED-CHIP?",
             default="n",
         )
 
@@ -82,7 +83,7 @@ class CliTests(unittest.TestCase):
             _confirm_possible(detection)
 
         prompt.assert_called_once_with(
-            "Is the device at 0x48 (alternate address) a ranked-chip?",
+            "Is the device at 0x48 (alternate address) a RANKED-CHIP?",
             default="n",
         )
 
@@ -102,8 +103,43 @@ class CliTests(unittest.TestCase):
             refined, confirmed = _refine_possible_matches(detections)
 
         self.assertEqual(refined, (detections[0],))
-        self.assertEqual(confirmed, {("first", 0x48)})
+        self.assertEqual(confirmed, {("first", (), 0x48)})
         confirm.assert_called_once_with(detections[0])
+
+    def test_confirmation_claims_only_one_mux_channel_address(self):
+        first = _named_possible_detection("first")
+        second = _named_possible_detection("second")
+        channel_zero = Detection(first.chip, first.address, first.result, (MuxHop(0x70, 0),))
+        channel_one = Detection(second.chip, second.address, second.result, (MuxHop(0x70, 1),))
+
+        with patch("stemma_detect.cli._confirm_possible", return_value=True) as confirm:
+            refined, confirmed = _refine_possible_matches((channel_zero, channel_one))
+
+        self.assertEqual(refined, (channel_zero, channel_one))
+        self.assertEqual(
+            confirmed,
+            {
+                ("first", (MuxHop(0x70, 0),), 0x48),
+                ("second", (MuxHop(0x70, 1),), 0x48),
+            },
+        )
+        self.assertEqual(confirm.call_count, 2)
+
+    def test_prompt_includes_mux_path(self):
+        detection = _possible_detection()
+        detection = Detection(
+            detection.chip,
+            detection.address,
+            detection.result,
+            (MuxHop(0x70, 2),),
+        )
+        with patch("stemma_detect.cli.SHELL.prompt", return_value=False) as prompt:
+            _confirm_possible(detection)
+
+        prompt.assert_called_once_with(
+            "Is the device at 0x48 via mux 0x70 channel 2 a POSSIBLE-CHIP?",
+            default="n",
+        )
 
     def test_declining_possible_removes_it_from_results(self):
         detection = _possible_detection()
@@ -134,7 +170,46 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(
             output.getvalue(),
-            "PROBE: example at 0x44 [command]: NO_MATCH: id=0x00\n",
+            "PROBE: EXAMPLE at 0x44 [command]: NO_MATCH: id=0x00\n",
+        )
+
+    def test_print_diagnostic_includes_weighted_score(self):
+        detection = _possible_detection()
+        diagnostic = ProbeDiagnostic(
+            detection.chip,
+            detection.address,
+            result=ProbeResult.possible(
+                {"register": "0x12"},
+                score=3,
+                max_score=5,
+            ),
+        )
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            _print_diagnostic(diagnostic)
+
+        self.assertEqual(
+            output.getvalue(),
+            "PROBE: POSSIBLE-CHIP at 0x48 [register]: POSSIBLE: register=0x12, score=3/5\n",
+        )
+
+    def test_print_diagnostic_includes_mux_path(self):
+        detection = _possible_detection()
+        diagnostic = ProbeDiagnostic(
+            detection.chip,
+            detection.address,
+            result=detection.result,
+            path=(MuxHop(0x70, 3),),
+        )
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            _print_diagnostic(diagnostic)
+
+        self.assertEqual(
+            output.getvalue(),
+            "PROBE: POSSIBLE-CHIP at 0x48 via mux 0x70 channel 3 [register]: POSSIBLE\n",
         )
 
     def test_print_diagnostic_includes_errors(self):
@@ -165,7 +240,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(
             output.getvalue(),
-            "PROBE: possible-chip at 0x48 [register]: NOT DETECTED\n",
+            "PROBE: POSSIBLE-CHIP at 0x48 [register]: NOT DETECTED\n",
         )
 
     def test_print_transaction_shows_raw_bytes(self):

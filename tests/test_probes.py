@@ -56,7 +56,19 @@ class ProbeTests(unittest.TestCase):
 
     def test_family_ids_refine_specific_names(self):
         cases = (
-            ("bmp3xx", FakeBus(b"\x60"), 0x77, "bmp390"),
+            (
+                "bmp3xx",
+                RegisterBus(
+                    {
+                        0x00: b"\x60",
+                        0x02: b"\x00",
+                        0x03: b"\x10",
+                        0x31: bytes(range(21)),
+                    }
+                ),
+                0x77,
+                "bmp390",
+            ),
             ("bmp5xx", FakeBus(b"\x51"), 0x47, "bmp585"),
             ("icm20x", FakeBus(b"\xea"), 0x69, "icm20948"),
             (
@@ -90,10 +102,7 @@ class ProbeTests(unittest.TestCase):
             ("adt7410", 0x48, b"\xcb"),
             ("apds9999", 0x39, b"\xc2"),
             ("as7341", 0x39, b"\x24"),
-            ("bme680", 0x77, b"\x61"),
-            ("bmp3xx", 0x77, b"\x50"),
             ("bmp5xx", 0x47, b"\x51"),
-            ("bno055", 0x28, b"\xa0"),
             ("ccs811", 0x5A, b"\x81"),
             ("dps310", 0x77, b"\x10"),
             ("ens160", 0x53, b"\x60\x01"),
@@ -113,6 +122,7 @@ class ProbeTests(unittest.TestCase):
             ("tsl2591", 0x29, b"\x50"),
             ("vl53l1x", 0x29, b"\xea\xcc\x10"),
             ("vl53l4cd", 0x29, b"\xeb\xaa"),
+            ("veml6075", 0x10, b"\x26\x00"),
         )
         for name, address, response in cases:
             module = importlib.import_module(f"stemma_detect.chips.{name}")
@@ -132,13 +142,129 @@ class ProbeTests(unittest.TestCase):
                 )
         self.assertIs(apds9960.probe(FakeBus(b"\x00"), 0x39).confidence, Confidence.NO_MATCH)
 
+    def test_bno055_signature(self):
+        module = importlib.import_module("stemma_detect.chips.bno055")
+        matched = RegisterBus(
+            {
+                0x00: b"\xa0",
+                0x01: b"\xfb",
+                0x02: b"\x32",
+                0x03: b"\x0f",
+                0x04: b"\x12\x34",
+            }
+        )
+        wrong_id = RegisterBus({0x00: b"\x00"})
+
+        result = module.probe(matched, 0x28)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (24, 24))
+        self.assertEqual(result.evidence["software_revision"], "0x1234")
+        self.assertIs(module.probe(wrong_id, 0x28).confidence, Confidence.NO_MATCH)
+
+    def test_bmp3xx_signature_refines_variant(self):
+        module = importlib.import_module("stemma_detect.chips.bmp3xx")
+        for chip_id, name in ((b"\x50", "bmp388"), (b"\x60", "bmp390")):
+            bus = RegisterBus(
+                {
+                    0x00: chip_id,
+                    0x02: b"\x00",
+                    0x03: b"\x10",
+                    0x31: bytes(range(21)),
+                }
+            )
+
+            result = module.probe(bus, 0x77)
+
+            with self.subTest(chip_id=chip_id):
+                self.assertIs(result.confidence, Confidence.MATCH)
+                self.assertEqual(result.name, name)
+                self.assertEqual((result.score, result.max_score), (19, 19))
+
     def test_bme280_id(self):
-        self.assertIs(bme280.probe(FakeBus(b"\x60"), 0x76).confidence, Confidence.MATCH)
-        self.assertIs(bme280.probe(FakeBus(b"\x58"), 0x76).confidence, Confidence.NO_MATCH)
+        matched = RegisterBus(
+            {
+                0xD0: b"\x60",
+                0xF3: b"\x09",
+                0x88: bytes(range(24)),
+                0xE1: bytes(range(7)),
+            }
+        )
+        wrong_id = RegisterBus({0xD0: b"\x58"})
+
+        result = bme280.probe(matched, 0x76)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.evidence, {"chip_id": "0x60", "signature": "17/17"})
+        self.assertEqual((result.score, result.max_score), (17, 17))
+        self.assertIs(bme280.probe(wrong_id, 0x76).confidence, Confidence.NO_MATCH)
 
     def test_bmp280_id(self):
-        self.assertIs(bmp280.probe(FakeBus(b"\x58"), 0x77).confidence, Confidence.MATCH)
-        self.assertIs(bmp280.probe(FakeBus(b"\x60"), 0x77).confidence, Confidence.NO_MATCH)
+        matched = RegisterBus(
+            {
+                0xD0: b"\x58",
+                0xF3: b"\x08",
+                0x88: bytes(range(24)),
+            }
+        )
+        wrong_id = RegisterBus({0xD0: b"\x60"})
+
+        self.assertIs(bmp280.probe(matched, 0x77).confidence, Confidence.MATCH)
+        self.assertIs(bmp280.probe(wrong_id, 0x77).confidence, Confidence.NO_MATCH)
+
+    def test_bme680_signature(self):
+        module = importlib.import_module("stemma_detect.chips.bme680")
+        matched = RegisterBus(
+            {
+                0xD0: b"\x61",
+                0xF0: b"\x01",
+                0x89: bytes(range(25)),
+                0xE1: bytes(range(16)),
+            }
+        )
+        wrong_id = RegisterBus({0xD0: b"\x60"})
+
+        result = module.probe(matched, 0x77)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(
+            result.evidence,
+            {"chip_id": "0x61", "variant": "0x01", "signature": "19/19"},
+        )
+        self.assertEqual((result.score, result.max_score), (19, 19))
+        self.assertIs(module.probe(wrong_id, 0x77).confidence, Confidence.NO_MATCH)
+
+    def test_bme280_signature_scores_reserved_status_bits(self):
+        bus = RegisterBus(
+            {
+                0xD0: b"\x60",
+                0xF3: b"\x02",
+                0x88: bytes(range(24)),
+                0xE1: bytes(range(7)),
+            }
+        )
+
+        result = bme280.probe(bus, 0x76)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (15, 17))
+        self.assertEqual(result.evidence["missed"], "status_reserved")
+
+    def test_bme280_signature_downgrades_blank_calibration(self):
+        bus = RegisterBus(
+            {
+                0xD0: b"\x60",
+                0xF3: b"\x00",
+                0x88: bytes(24),
+                0xE1: bytes(range(7)),
+            }
+        )
+
+        result = bme280.probe(bus, 0x76)
+
+        self.assertIs(result.confidence, Confidence.POSSIBLE)
+        self.assertEqual((result.score, result.max_score), (14, 17))
+        self.assertEqual(result.evidence["missed"], "calibration_tp")
 
     def test_lis3dh_id(self):
         self.assertIs(lis3dh.probe(FakeBus(b"\x33"), 0x18).confidence, Confidence.MATCH)
@@ -150,16 +276,24 @@ class ProbeTests(unittest.TestCase):
 
     def test_ltr329_ltr303_ids(self):
         module = importlib.import_module("stemma_detect.chips.ltr329_ltr303")
-        matched = RegisterBus({0x86: b"\xa0", 0x87: b"\x05"})
-        wrong = RegisterBus({0x86: b"\xa0", 0x87: b"\x00"})
+        matched = RegisterBus({0x86: b"\xa3", 0x87: b"\x05"})
+        wrong = RegisterBus({0x86: b"\x00"})
 
-        self.assertIs(module.probe(matched, 0x29).confidence, Confidence.MATCH)
+        result = module.probe(matched, 0x29)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (16, 16))
+        self.assertEqual(result.evidence["part_id"], "0xA3")
         self.assertIs(module.probe(wrong, 0x29).confidence, Confidence.NO_MATCH)
 
     def test_mcp9808_ids(self):
         matched = RegisterBus({0x06: b"\x00\x54", 0x07: b"\x04\x01"})
         wrong_device = RegisterBus({0x06: b"\x00\x54", 0x07: b"\x03\x01"})
-        self.assertIs(mcp9808.probe(matched, 0x18).confidence, Confidence.MATCH)
+        result = mcp9808.probe(matched, 0x18)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (17, 17))
+        self.assertEqual(result.evidence["device_id_revision"], "0x0401")
         self.assertIs(mcp9808.probe(wrong_device, 0x18).confidence, Confidence.NO_MATCH)
 
     def test_ina_family_ids(self):
@@ -167,13 +301,18 @@ class ProbeTests(unittest.TestCase):
             ("ina228", 0x3E, 0x3F, 0x228),
             ("ina23x", 0x3E, 0x3F, 0x237),
             ("ina260", 0xFE, 0xFF, 0x227),
+            ("ina3221", 0xFE, 0xFF, 0x3220),
         )
         for name, manufacturer_register, device_register, part in cases:
             module = importlib.import_module(f"stemma_detect.chips.{name}")
             matched = RegisterBus(
                 {
                     manufacturer_register: b"\x54\x49",
-                    device_register: (part << 4).to_bytes(2, "big"),
+                    device_register: (
+                        part.to_bytes(2, "big")
+                        if name == "ina3221"
+                        else (part << 4).to_bytes(2, "big")
+                    ),
                 }
             )
             wrong = RegisterBus(
@@ -191,6 +330,7 @@ class ProbeTests(unittest.TestCase):
 
         self.assertIs(result.confidence, Confidence.POSSIBLE)
         self.assertEqual(result.evidence, {"conversion": "0x7F"})
+        self.assertEqual((result.score, result.max_score), (1, 1))
 
     def test_sht4x_crc(self):
         data = bytes((0x12, 0x34, sht4x._crc8(b"\x12\x34"), 0x56, 0x78, sht4x._crc8(b"\x56\x78")))

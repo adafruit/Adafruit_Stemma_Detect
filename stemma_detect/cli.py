@@ -7,9 +7,22 @@ from importlib.metadata import PackageNotFoundError, version
 from .bus import I2CBus, I2CTransaction
 from .catalog import discover_chips
 from .installer import install
+from .mux import MuxHop
 from .result import Confidence
 from .runtime import SHELL
-from .scanner import Detection, ProbeDiagnostic, scan
+from .scanner import Detection, ProbeDiagnostic, scan_all
+
+
+def _path_text(path: tuple[MuxHop, ...]) -> str:
+    return "".join(f" via mux 0x{hop.address:02X} channel {hop.channel}" for hop in path)
+
+
+def _detection_key(detection: Detection) -> tuple[tuple[MuxHop, ...], int]:
+    return detection.path, detection.address
+
+
+def _confirmation_key(detection: Detection) -> tuple[str, tuple[MuxHop, ...], int]:
+    return detection.chip.name, detection.path, detection.address
 
 
 def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -48,7 +61,11 @@ def _installed_version(package: str) -> str | None:
 def _confirm_possible(detection: Detection) -> bool:
     address_kind = detection.chip.address_kind(detection.address)
     address_note = f" ({address_kind} address)" if address_kind else ""
-    prompt = f"Is the device at 0x{detection.address:02X}{address_note} a {detection.name}?"
+    path = _path_text(detection.path)
+    prompt = (
+        f"Is the device at 0x{detection.address:02X}{path}{address_note} "
+        f"a {detection.name.upper()}?"
+    )
     try:
         return SHELL.prompt(prompt, default="n")
     except (EOFError, KeyboardInterrupt):
@@ -58,7 +75,8 @@ def _confirm_possible(detection: Detection) -> bool:
 
 def _print_diagnostic(diagnostic: ProbeDiagnostic) -> None:
     prefix = (
-        f"PROBE: {diagnostic.chip.name} at 0x{diagnostic.address:02X} "
+        f"PROBE: {diagnostic.chip.name.upper()} at 0x{diagnostic.address:02X}"
+        f"{_path_text(diagnostic.path)} "
         f"[{diagnostic.chip.probe_risk.name.lower()}]"
     )
     if diagnostic.error is not None:
@@ -71,6 +89,9 @@ def _print_diagnostic(diagnostic: ProbeDiagnostic) -> None:
     if diagnostic.result is None:
         raise RuntimeError("probe diagnostic has neither a result nor an error")
     evidence = ", ".join(f"{key}={value}" for key, value in diagnostic.result.evidence.items())
+    if diagnostic.result.score is not None:
+        score = f"score={diagnostic.result.score}/{diagnostic.result.max_score}"
+        evidence = ", ".join(filter(None, (evidence, score)))
     suffix = f": {evidence}" if evidence else ""
     print(f"{prefix}: {diagnostic.outcome.upper()}{suffix}")
 
@@ -86,7 +107,10 @@ def _print_transaction(transaction: I2CTransaction) -> None:
 
 def _refine_possible_matches(
     detections: tuple[Detection, ...],
-) -> tuple[tuple[Detection, ...], set[tuple[str, int]]]:
+) -> tuple[
+    tuple[Detection, ...],
+    set[tuple[str, tuple[MuxHop, ...], int]],
+]:
     refined = []
     confirmed = set()
     claimed_addresses = set()
@@ -95,12 +119,13 @@ def _refine_possible_matches(
         if detection.result.confidence is not Confidence.POSSIBLE:
             refined.append(detection)
             continue
-        if detection.address in claimed_addresses:
+        detection_key = _detection_key(detection)
+        if detection_key in claimed_addresses:
             continue
         if _confirm_possible(detection):
             refined.append(detection)
-            confirmed.add((detection.chip.name, detection.address))
-            claimed_addresses.add(detection.address)
+            confirmed.add(_confirmation_key(detection))
+            claimed_addresses.add(detection_key)
 
     return tuple(refined), confirmed
 
@@ -113,15 +138,19 @@ def main() -> int:
         args.bus,
         trace=_print_transaction if args.diagnostics else None,
     ) as bus:
-        detections = scan(
+        report = scan_all(
             bus,
             chips,
             diagnostic=_print_diagnostic if args.diagnostics else None,
         )
+        detections = report.detections
 
     confirmed_possible = set()
     if args.install and args.prompt_possible_matches:
         detections, confirmed_possible = _refine_possible_matches(detections)
+
+    for mux in report.multiplexers:
+        print(f"MUX: {mux.name.upper()} at 0x{mux.address:02X} ({mux.channels} channels)")
 
     if not detections:
         print("No supported Adafruit STEMMA QT sensors detected.")
@@ -129,12 +158,15 @@ def main() -> int:
 
     for detection in detections:
         label = "MATCH" if detection.result.confidence is Confidence.MATCH else "POSSIBLE"
-        print(f"{label}: {detection.name} at 0x{detection.address:02X}")
-        if detection.result.evidence:
-            evidence = ", ".join(
-                f"{key}={value}" for key, value in detection.result.evidence.items()
-            )
-            print(f"  {evidence}")
+        print(
+            f"{label}: {detection.name.upper()} at 0x{detection.address:02X}"
+            f"{_path_text(detection.path)}"
+        )
+        if detection.result.evidence or detection.result.score is not None:
+            fields = [f"{key}={value}" for key, value in detection.result.evidence.items()]
+            if detection.result.score is not None:
+                fields.append(f"score={detection.result.score}/{detection.result.max_score}")
+            print(f"  {', '.join(fields)}")
         installed = _installed_version(detection.chip.package)
         if installed:
             print(f"  driver: {detection.chip.package} {installed} (installed)")
@@ -145,11 +177,7 @@ def main() -> int:
         for detection in detections:
             should_install = (
                 detection.result.confidence is Confidence.MATCH
-                or (
-                    detection.chip.name,
-                    detection.address,
-                )
-                in confirmed_possible
+                or _confirmation_key(detection) in confirmed_possible
             )
             if should_install and _installed_version(detection.chip.package) is None:
                 print(f"Installing: {detection.chip.package}")

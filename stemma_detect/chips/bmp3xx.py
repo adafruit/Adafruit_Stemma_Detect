@@ -1,6 +1,10 @@
-from stemma_detect.result import Confidence, ProbeResult
+from dataclasses import replace
+
+from stemma_detect.result import Confidence
+from stemma_detect.signature import DeviceSignature, exact, not_blank, one_of
 
 ADDRESSES = (0x76, 0x77)
+DEFAULT_ADDRESSES = (0x77,)
 PACKAGE = "adafruit-circuitpython-bmp3xx"
 PROBE_CONFIDENCE = Confidence.MATCH
 NAMES = {
@@ -8,12 +12,34 @@ NAMES = {
     0x60: "bmp390",
 }
 
+SIGNATURE = DeviceSignature(
+    (
+        one_of("chip_id", 0x00, (b"\x50", b"\x60"), show_value=True, weight=10),
+        exact(
+            "error_reserved",
+            0x02,
+            b"\x00",
+            mask=b"\xf8",
+            required=False,
+            weight=2,
+        ),
+        exact(
+            "status_reserved",
+            0x03,
+            b"\x00",
+            mask=b"\x8f",
+            required=False,
+            weight=2,
+        ),
+        not_blank("calibration", 0x31, 21, required=False, weight=5),
+    ),
+    match_threshold=15,
+)
+
 
 def probe(bus, address):
-    chip_id = bus.read_register(address, 0x00, 1)
-    if len(chip_id) != 1 or chip_id[0] not in NAMES:
-        return ProbeResult.no_match()
-    return ProbeResult.match(
-        {"chip_id": f"0x{chip_id[0]:02X}"},
-        name=NAMES[chip_id[0]],
-    )
+    result = SIGNATURE.probe(bus, address)
+    if result.confidence is Confidence.NO_MATCH:
+        return result
+    chip_id = int(result.evidence["chip_id"], 16)
+    return replace(result, name=NAMES[chip_id])
