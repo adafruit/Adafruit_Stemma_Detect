@@ -104,6 +104,13 @@ def scan(
 
             address_detections.append(detection)
 
+        # Ask about the strongest signatures first. This also makes the normal
+        # report put richer possible matches ahead of address-only guesses.
+        address_detections.sort(
+            key=lambda detection: (
+                -(detection.result.score if detection.result.score is not None else -1)
+            )
+        )
         detections.extend(address_detections)
 
     return tuple(detections)

@@ -2,10 +2,24 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 from stemma_detect.result import ProbeResult
 
 Validator = Callable[[bytes], bool]
+
+
+class SignatureCheck(Protocol):
+    """One weighted operation in a device signature."""
+
+    label: str
+    length: int
+    validator: Validator
+    show_value: bool
+    required: bool
+    weight: int
+
+    def read(self, bus, address: int) -> bytes: ...
 
 
 @dataclass(frozen=True)
@@ -26,6 +40,63 @@ class RegisterCheck:
 
     def read(self, bus, address: int) -> bytes:
         return bus.read_register(address, self.register, self.length)
+
+
+@dataclass(frozen=True)
+class CommandCheck:
+    """A write-then-read command used as weighted signature evidence."""
+
+    label: str
+    command: bytes
+    length: int
+    validator: Validator
+    delay_ms: float = 0
+    show_value: bool = False
+    required: bool = True
+    weight: int = 1
+
+    def __post_init__(self) -> None:
+        if not self.command:
+            raise ValueError("command must not be empty")
+        if self.length < 1:
+            raise ValueError("command response length must be positive")
+        if self.delay_ms < 0:
+            raise ValueError("command delay must not be negative")
+        if self.weight < 1:
+            raise ValueError("command check weight must be positive")
+
+    def read(self, bus, address: int) -> bytes:
+        return bus.write_then_read(
+            address,
+            self.command,
+            self.length,
+            delay_ms=self.delay_ms,
+        )
+
+
+def command_response(
+    label: str,
+    command: bytes,
+    length: int,
+    validator: Validator,
+    *,
+    delay_ms: float = 0,
+    show_value: bool = False,
+    required: bool = True,
+    weight: int = 1,
+) -> CommandCheck:
+    """Build a check for a safe command with a validated response."""
+
+    return CommandCheck(
+        label,
+        command,
+        length,
+        validator,
+        delay_ms,
+        show_value,
+        required,
+        weight,
+    )
 
 
 def exact(
@@ -121,9 +192,9 @@ def not_blank(
 
 @dataclass(frozen=True)
 class DeviceSignature:
-    """Weighted register evidence used to identify a device."""
+    """Weighted read-only evidence used to identify a device."""
 
-    checks: tuple[RegisterCheck, ...]
+    checks: tuple[SignatureCheck, ...]
     match_threshold: int | None = None
 
     def __post_init__(self) -> None:

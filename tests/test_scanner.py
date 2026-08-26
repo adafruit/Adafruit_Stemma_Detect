@@ -257,6 +257,28 @@ class ScannerTests(unittest.TestCase):
             ["default", "alternate"],
         )
 
+    def test_possible_matches_are_ranked_by_evidence_score(self):
+        chips = (
+            Chip(
+                "weak",
+                (0x48,),
+                "weak-package",
+                lambda _bus, _address: ProbeResult.possible(score=1, max_score=4),
+                Confidence.POSSIBLE,
+            ),
+            Chip(
+                "strong",
+                (0x48,),
+                "strong-package",
+                lambda _bus, _address: ProbeResult.possible(score=8, max_score=10),
+                Confidence.POSSIBLE,
+            ),
+        )
+
+        detections = scan(object(), chips)
+
+        self.assertEqual([item.name for item in detections], ["strong", "weak"])
+
 
 if __name__ == "__main__":
     unittest.main()

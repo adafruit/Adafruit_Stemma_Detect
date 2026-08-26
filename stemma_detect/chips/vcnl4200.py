@@ -1,7 +1,9 @@
-from stemma_detect.chips._possible import address_read_probe
 from stemma_detect.result import Confidence
+from stemma_detect.signature import DeviceSignature, exact
 
 ADDRESSES = (0x51,)
 PACKAGE = "adafruit-circuitpython-vcnl4200"
-PROBE_CONFIDENCE = Confidence.POSSIBLE
-probe = address_read_probe
+PROBE_CONFIDENCE = Confidence.MATCH
+
+SIGNATURE = DeviceSignature((exact("device_id", 0x0E, b"\x58\x10", show_value=True, weight=12),))
+probe = SIGNATURE.probe

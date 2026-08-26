@@ -4,7 +4,11 @@ from stemma_detect.result import ProbeResult, ProbeRisk
 def address_read_probe(bus, address):
     """Confirm an address responds without claiming a unique identity."""
     response = bus.read(address, 1)
-    return ProbeResult.possible({"response": f"0x{response[0]:02X}"})
+    return ProbeResult.possible(
+        {"response": f"0x{response[0]:02X}"},
+        score=1,
+        max_score=1,
+    )
 
 
 address_read_probe.probe_risk = ProbeRisk.PASSIVE

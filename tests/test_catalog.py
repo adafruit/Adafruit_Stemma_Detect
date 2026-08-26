@@ -11,7 +11,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(
             {chip.name for chip in chips},
             {
-                "aht20",
+                "ahtx0",
                 "adt7410",
                 "adxl34x",
                 "adxl37x",
@@ -114,7 +114,7 @@ class CatalogTests(unittest.TestCase):
         chips = {chip.name: chip for chip in discover_chips()}
 
         self.assertEqual(chips["pcf8591"].default_addresses, (0x48,))
-        self.assertEqual(chips["aht20"].default_addresses, (0x38,))
+        self.assertEqual(chips["ahtx0"].default_addresses, (0x38,))
         self.assertEqual(chips["pcf8591"].address_kind(0x48), "default")
         self.assertEqual(chips["pcf8591"].address_kind(0x49), "alternate")
 

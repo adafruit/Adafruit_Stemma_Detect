@@ -3,6 +3,7 @@ import unittest
 
 from stemma_detect.chips import (
     _possible,
+    _sensirion,
     apds9960,
     bme280,
     bmp280,
@@ -43,16 +44,100 @@ class RegisterBus:
         return self.responses[register]
 
 
+class CommandBus:
+    def __init__(self, responses):
+        self.responses = responses
+
+    def write_then_read(self, _address, command, _length, *, delay_ms=0):
+        return self.responses[command]
+
+
 class ProbeTests(unittest.TestCase):
+    def test_crc_protected_command_identities(self):
+        def words(*values):
+            return b"".join(value + bytes((_sensirion.crc8(value),)) for value in values)
+
+        cases = (
+            ("sgp30", 0x58, words(b"\x00\x22")),
+            ("shtc3", 0x70, words(b"\x08\x07")),
+            ("sht31d", 0x44, words(b"\x12\x34", b"\x56\x78")),
+            ("si7021", 0x40, words(b"\x15\x34", b"\x56\x78")),
+        )
+        for name, address, response in cases:
+            module = importlib.import_module(f"stemma_detect.chips.{name}")
+            with self.subTest(name=name):
+                result = module.probe(FakeBus(response), address)
+                self.assertIs(result.confidence, Confidence.MATCH)
+                self.assertEqual((result.score, result.max_score), (result.max_score,) * 2)
+                self.assertIs(
+                    module.probe(
+                        FakeBus(response[:-1] + bytes((response[-1] ^ 0xFF,))), address
+                    ).confidence,
+                    Confidence.NO_MATCH,
+                )
+
+    def test_sgp40_and_sgp41_are_distinguished(self):
+        def words(*values):
+            return b"".join(value + bytes((_sensirion.crc8(value),)) for value in values)
+
+        sgp40 = importlib.import_module("stemma_detect.chips.sgp40")
+        sgp41 = importlib.import_module("stemma_detect.chips.sgp41")
+        sgp40_bus = CommandBus(
+            {
+                b"\x36\x82": words(b"\x00\x00", b"\x12\x34", b"\x56\x78"),
+                b"\x20\x2f": words(b"\x32\x20"),
+            }
+        )
+        sgp41_serial = words(b"\x12\x34", b"\x56\x78", b"\x9a\xbc")
+
+        self.assertIs(sgp40.probe(sgp40_bus, 0x59).confidence, Confidence.MATCH)
+        self.assertIs(sgp40.probe(FakeBus(sgp41_serial), 0x59).confidence, Confidence.NO_MATCH)
+        self.assertIs(sgp41.probe(FakeBus(sgp41_serial), 0x59).confidence, Confidence.MATCH)
+
+    def test_hdc302x_manufacturer_id_and_crc(self):
+        module = importlib.import_module("stemma_detect.chips.hdc302x")
+        manufacturer_id = b"\x30\x00"
+        response = manufacturer_id + bytes((_sensirion.crc8(manufacturer_id),))
+
+        self.assertIs(module.probe(FakeBus(response), 0x44).confidence, Confidence.MATCH)
+        self.assertIs(
+            module.probe(FakeBus(response[:-1] + b"\x00"), 0x44).confidence,
+            Confidence.NO_MATCH,
+        )
+
     def test_address_only_probe_is_never_definitive(self):
         result = _possible.address_read_probe(FakeBus(b"\x5a"), 0x44)
 
         self.assertIs(result.confidence, Confidence.POSSIBLE)
         self.assertEqual(result.evidence, {"response": "0x5A"})
+        self.assertEqual((result.score, result.max_score), (1, 1))
 
     def test_mpu6050_id(self):
         self.assertIs(mpu6050.probe(FakeBus(b"\x68"), 0x68).confidence, Confidence.MATCH)
         self.assertIs(mpu6050.probe(FakeBus(b"\x00"), 0x68).confidence, Confidence.NO_MATCH)
+
+    def test_same_id_different_adxl_drivers_remain_possible(self):
+        for name in ("adxl34x", "adxl37x"):
+            module = importlib.import_module(f"stemma_detect.chips.{name}")
+            with self.subTest(name=name):
+                result = module.probe(FakeBus(b"\xe5"), 0x53)
+                self.assertIs(result.confidence, Confidence.POSSIBLE)
+                self.assertEqual((result.score, result.max_score), (8, 10))
+                self.assertIs(
+                    module.probe(FakeBus(b"\x00"), 0x53).confidence,
+                    Confidence.NO_MATCH,
+                )
+
+    def test_lps2x_groups_same_driver_variants_without_overclaiming(self):
+        module = importlib.import_module("stemma_detect.chips.lps2x")
+
+        lps25 = module.probe(FakeBus(b"\xbd"), 0x5D)
+        self.assertIs(lps25.confidence, Confidence.MATCH)
+        self.assertEqual(lps25.name, "lps25")
+
+        # LPS22 and LPS35HW share 0xB1 but use different packages.
+        self.assertIs(module.probe(FakeBus(b"\xb1"), 0x5D).confidence, Confidence.POSSIBLE)
+        self.assertIs(module.probe(FakeBus(b"\x00"), 0x5D).confidence, Confidence.NO_MATCH)
 
     def test_family_ids_refine_specific_names(self):
         cases = (
@@ -112,6 +197,7 @@ class ProbeTests(unittest.TestCase):
             ("lis331", 0x18, b"\x32"),
             ("lis3mdl", 0x1C, b"\x3d"),
             ("lsm6ds", 0x6A, b"\x6c"),
+            ("lsm9ds1", 0x6B, b"\x68"),
             ("max1704x", 0x36, b"\x00\x11"),
             ("mcp9600", 0x67, b"\x40\x01"),
             ("mmc56x3", 0x30, b"\x10"),
@@ -120,6 +206,13 @@ class ProbeTests(unittest.TestCase):
             ("tcs34725", 0x29, b"\x44"),
             ("tmp117", 0x48, b"\x01\x17"),
             ("tsl2591", 0x29, b"\x50"),
+            ("lps28", 0x5C, b"\xb4"),
+            ("opt4048", 0x44, b"\x08\x21"),
+            ("spa06_003", 0x77, b"\x11"),
+            ("sths34pf80", 0x5A, b"\xd3"),
+            ("vcnl4020", 0x13, b"\x21"),
+            ("vcnl4030", 0x60, b"\x80\x42"),
+            ("vcnl4200", 0x51, b"\x58\x10"),
             ("vl53l1x", 0x29, b"\xea\xcc\x10"),
             ("vl53l4cd", 0x29, b"\xeb\xaa"),
             ("veml6075", 0x10, b"\x26\x00"),
@@ -132,6 +225,107 @@ class ProbeTests(unittest.TestCase):
                     module.probe(FakeBus(bytes(len(response))), address).confidence,
                     Confidence.NO_MATCH,
                 )
+
+    def test_pmsa003i_frame_signature(self):
+        module = importlib.import_module("stemma_detect.chips.pmsa003i")
+        frame = bytearray(32)
+        frame[:2] = b"BM"
+        frame[2:4] = (28).to_bytes(2, "big")
+        frame[4:30] = bytes(range(26))
+        frame[30:32] = sum(frame[:30]).to_bytes(2, "big")
+
+        result = module.probe(FakeBus(bytes(frame)), 0x12)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (12, 12))
+
+        frame[30] ^= 0x01
+        self.assertIs(
+            module.probe(FakeBus(bytes(frame)), 0x12).confidence,
+            Confidence.NO_MATCH,
+        )
+
+    def test_sen6x_crc_product_name(self):
+        module = importlib.import_module("stemma_detect.chips.sen6x")
+
+        def words(payload):
+            payload = payload.ljust(32, b"\x00")
+            return b"".join(
+                payload[offset : offset + 2]
+                + bytes((_sensirion.crc8(payload[offset : offset + 2]),))
+                for offset in range(0, 32, 2)
+            )
+
+        result = module.probe(FakeBus(words(b"SEN66")), 0x6B)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.name, "sen66")
+        self.assertIs(
+            module.probe(FakeBus(words(b"NOT-A-SEN")), 0x6B).confidence,
+            Confidence.NO_MATCH,
+        )
+
+    def test_scd30_firmware_signature(self):
+        module = importlib.import_module("stemma_detect.chips.scd30")
+        version = b"\x03\x42"
+        response = version + bytes((_sensirion.crc8(version),))
+
+        result = module.probe(FakeBus(response), 0x61)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.evidence["firmware_version"], "3.66")
+
+    def test_scd4x_operating_mode_aware_signature(self):
+        module = importlib.import_module("stemma_detect.chips.scd4x")
+
+        def word(value):
+            payload = value.to_bytes(2, "big")
+            return payload + bytes((_sensirion.crc8(payload),))
+
+        result = module.probe(
+            CommandBus({b"\xe4\xb8": word(1), b"\x20\x2f": word(0x1000)}),
+            0x62,
+        )
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.name, "scd41")
+        self.assertEqual((result.score, result.max_score), (14, 14))
+
+        invalid_status = module.probe(
+            CommandBus({b"\xe4\xb8": word(0xF800), b"\x20\x2f": word(0)}),
+            0x62,
+        )
+        self.assertIs(invalid_status.confidence, Confidence.NO_MATCH)
+
+    def test_lc709203f_pec_signature(self):
+        module = importlib.import_module("stemma_detect.chips.lc709203f")
+
+        def response(register, value):
+            payload = value.to_bytes(2, "little")
+            pec_input = bytes((0x16, register, 0x17)) + payload
+            return payload + bytes((module._crc8(pec_input),))
+
+        bus = RegisterBus({0x1A: response(0x1A, 0x0504), 0x11: response(0x11, 0x1234)})
+        result = module.probe(bus, 0x0B)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (14, 14))
+
+        bad_pec = RegisterBus({0x1A: b"\x04\x05\x00"})
+        self.assertIs(module.probe(bad_pec, 0x0B).confidence, Confidence.NO_MATCH)
+
+    def test_mlx90632_factory_signature(self):
+        module = importlib.import_module("stemma_detect.chips.mlx90632")
+        bus = CommandBus(
+            {
+                b"\x24\x05": b"\x12\x34\x56\x78\x9a\xbc",
+                b"\x24\x09": b"\x00\x82",
+                b"\x24\x0b": b"\x01\x05",
+            }
+        )
+        result = module.probe(bus, 0x3A)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (14, 14))
+
+        bad_product = CommandBus(
+            {b"\x24\x05": b"\x12\x34\x56\x78\x9a\xbc", b"\x24\x09": b"\xfc\x02"}
+        )
+        self.assertIs(module.probe(bad_product, 0x3A).confidence, Confidence.NO_MATCH)
 
     def test_apds9960_ids(self):
         for device_id in (b"\xa8", b"\xab"):

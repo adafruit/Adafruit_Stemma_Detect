@@ -1,7 +1,7 @@
 import unittest
 
 from stemma_detect.result import Confidence
-from stemma_detect.signature import DeviceSignature, exact, not_blank, one_of
+from stemma_detect.signature import DeviceSignature, command_response, exact, not_blank, one_of
 
 
 class RegisterBus:
@@ -15,7 +15,39 @@ class RegisterBus:
         return value
 
 
+class CommandBus:
+    def __init__(self, response):
+        self.response = response
+        self.transaction = None
+
+    def write_then_read(self, address, command, length, *, delay_ms=0):
+        self.transaction = (address, command, length, delay_ms)
+        return self.response
+
+
 class SignatureTests(unittest.TestCase):
+    def test_command_response_participates_in_signature(self):
+        signature = DeviceSignature(
+            (
+                command_response(
+                    "identity",
+                    b"\x12\x34",
+                    2,
+                    lambda value: value == b"\xab\xcd",
+                    delay_ms=5,
+                    show_value=True,
+                    weight=8,
+                ),
+            )
+        )
+        bus = CommandBus(b"\xab\xcd")
+
+        result = signature.probe(bus, 0x44)
+
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.evidence, {"identity": "0xABCD", "signature": "8/8"})
+        self.assertEqual(bus.transaction, (0x44, b"\x12\x34", 2, 5))
+
     def test_all_checks_form_a_match(self):
         signature = DeviceSignature(
             (

@@ -154,7 +154,8 @@ chip module.
 Definitive probes run before possible-only probes at each address. Within each category, probes are
 ordered from lowest to highest risk: passive reads, ordinary one-byte register reads, then commands
 or multi-byte register addressing. A definitive match prevents all remaining probes from touching
-that address.
+that address. When only possible matches remain, candidates with more weighted signature evidence
+are reported and prompted first; a factory-default address adds a small score bonus.
 
 Known limitations and planned work
 ==================================
@@ -191,27 +192,32 @@ also consult Adafruit's `I²C clock stretching guide
 Supported sensors so far
 ========================
 
-The catalog currently contains 91 sensor definitions: 44 with definitive probes and 47 that
+The catalog currently contains 91 sensor definitions: 66 with definitive-capable probes and 25 that
 produce possible matches. Possible matches are never installed without
 ``--prompt-possible-matches`` and user confirmation.
 
 Sensors with definitive probes include ADT7410, APDS9960, APDS9999, AS7341, BME280, BME680, BMP280,
-BMP3xx, BMP5xx, BNO055, CCS811, DPS310, ENS160, HTS221, ICM20x, INA228, INA237/INA238,
-INA260, INA3221, LIS2MDL, LIS331, LIS3DH, LIS3MDL, LSM6DS, LTR329/LTR303, LTR390, MAX1704x, MCP9600, MCP9808,
-MMC5603, MPU6050, MSA301, QMC5883P, SHT4x, STCC4, TCS34725, TMP117/TMP119, TSL2591,
-VCNL4040, VEML6075, VL53L0X, VL53L1X, VL53L4CD, and VL6180X.
+BMP3xx, BMP5xx, BNO055, CCS811, DPS310, ENS160, HDC302x, HTS221, ICM20x, INA228,
+INA237/INA238, INA260, INA3221, LC709203F, LIS2MDL, LIS331, LIS3DH, LIS3MDL, LPS2x,
+LPS28, LSM6DS, LSM9DS1, LTR329/LTR303, LTR390, MAX1704x, MCP9600, MCP9808, MLX90632,
+MMC5603, MPU6050, MSA301, OPT4048, PMSA003I, QMC5883P, SCD30, SCD4x, SEN6x,
+SGP30, SGP40, SGP41, SHT31D, SHT4x, SHTC3, Si7021, SPA06-003, STCC4,
+STHS34PF80, TCS34725, TMP117/TMP119, TSL2591, VCNL4020, VCNL4030, VCNL4040,
+VCNL4200, VEML6075, VL53L0X, VL53L1X, VL53L4CD, and VL6180X.
 
-Possible-match definitions include ADXL34x, ADXL37x, AHT20, AS5600, AS726x, AS7331,
-BH1750, BNO08x, DS3502, HDC302x, HTU31D, INA219, LC709203F, LPS2x, LPS28, LPS35HW,
-LSM303 accelerometer, LSM9DS1, MCP3421, MLX90393, MLX90632, MLX90640, MPR121,
-MPRLS, MS8607, OPT4048, PA1010D, PCF8591, PCT2075, PMSA003I, SCD30, SCD4x, SEN6x,
-SGP30, SGP40, SGP41, SHT31D, SHTC3, Si7021, SPA06-003, STHS34PF80, TLV493D, TSC2007,
-VCNL4020, VCNL4030, VCNL4200, and VEML7700.
+Possible-match definitions include ADXL34x, ADXL37x, AHTx0, AS5600, AS726x, AS7331,
+BH1750, BNO08x, DS3502, HTU31D, INA219, LPS35HW, LSM303 accelerometer,
+MCP3421, MLX90393, MLX90640, MPR121, MPRLS, MS8607, PA1010D, PCF8591, PCT2075,
+TLV493D, TSC2007, and VEML7700.
 
 Adding a sensor
 ===============
 
 Add one module under ``stemma_detect/chips/``. Modules are discovered automatically, so no registry edit is needed.
+Use one module per installable driver family: chips that cannot be distinguished but use the same
+CircuitPython package should share a family definition and produce one detection. The catalog
+requires package names to be unique. Keep separate definitions when ambiguity changes which driver
+would be installed.
 
 .. code-block:: python
 
@@ -237,8 +243,9 @@ write.
 Family probes may pass ``name`` to ``ProbeResult.match()`` when an identity register distinguishes a
 specific chip. Ambiguous IDs should remain at the family level.
 
-When a sensor has several useful read-only registers, prefer a device signature over custom probe
-logic:
+When a sensor has several useful read-only registers or safe identity commands, prefer a device
+signature over custom probe logic. ``command_response`` supports CRC-protected serial-number and
+feature-set commands while using the same weights and result handling as register checks.
 
 .. code-block:: python
 
@@ -278,7 +285,9 @@ Scores represent accumulated evidence, not a statistical probability. Weights sh
 consistent across definitions: exact identity registers should dominate, while address responses
 and default-address bonuses should remain weak evidence.
 
-Only use documented, safe reads: avoid FIFO, read-to-clear, write-only, and command registers.
+Only use documented, safe reads: avoid FIFO, read-to-clear, write-only, initialization, reset, and
+measurement commands. Identity and serial-number commands are suitable when their datasheet says
+they do not alter sensor state. Mark command-based probes as ``ProbeRisk.COMMAND``.
 ``not_blank`` is intended for factory-programmed blocks where all-zero and all-``0xFF`` data are
 invalid; it should not be used for ordinary configuration or measurement registers.
 

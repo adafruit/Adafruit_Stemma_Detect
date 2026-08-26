@@ -50,10 +50,15 @@ def probe_multiplexer(bus: I2CBusProtocol, address: int) -> Multiplexer | None:
 
     changed = False
     try:
-        bus.write(address, b"\x01")
-        changed = True
-        if bus.read(address, 1) != b"\x01":
-            return None
+        # Check multiple masks. A register-based sensor can coincidentally return
+        # one expected byte after a one-byte write is treated as a register
+        # pointer (BMP390 can do this at 0x77), but is very unlikely to echo this
+        # complete mux-control sequence.
+        for control in (0x01, 0x02, 0x03):
+            bus.write(address, bytes((control,)))
+            changed = True
+            if bus.read(address, 1) != bytes((control,)):
+                return None
 
         bus.write(address, b"\x10")
         high_channel = bus.read(address, 1)

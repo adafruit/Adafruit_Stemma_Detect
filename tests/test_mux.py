@@ -61,6 +61,17 @@ class MuxTests(unittest.TestCase):
         self.assertIsNone(probe_multiplexer(bus, 0x70))
         self.assertEqual(bus.writes, [])
 
+    def test_probe_rejects_sensor_that_accidentally_matches_first_mask(self):
+        class RegisterPointerSensor(FakeMuxBus):
+            def write(self, address, data):
+                self.writes.append((address, data))
+                self.control = {0x01: 0x01, 0x02: 0x10}.get(data[0], 0x00)
+
+        bus = RegisterPointerSensor()
+
+        self.assertIsNone(probe_multiplexer(bus, 0x70))
+        self.assertEqual(bus.control, 0)
+
     def test_discovery_ignores_addresses_that_do_not_acknowledge(self):
         bus = FakeMuxBus()
 
