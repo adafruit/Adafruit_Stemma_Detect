@@ -44,9 +44,7 @@ def probe_multiplexer(bus: I2CBusProtocol, address: int) -> Multiplexer | None:
     """Actively verify mux control-byte behavior and restore its original state."""
 
     original = bus.read(address, 1)
-    if len(original) != 1 or (
-        original[0] > 0x0F and original[0] not in (0x10, 0x20, 0x40, 0x80)
-    ):
+    if len(original) != 1 or (original[0] > 0x0F and original[0] not in (0x10, 0x20, 0x40, 0x80)):
         # A fresh four- or eight-channel mux normally has no channels selected.
         # Also permit one selected high channel on an eight-channel mux, while
         # restricting the initial value enough to avoid most unrelated devices.

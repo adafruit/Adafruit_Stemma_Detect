@@ -167,9 +167,7 @@ def _scan_segment(
             excluded_addresses=upstream_mux_addresses,
         )
     ]
-    visible_mux_addresses = upstream_mux_addresses | frozenset(
-        mux.address for mux in local_muxes
-    )
+    visible_mux_addresses = upstream_mux_addresses | frozenset(mux.address for mux in local_muxes)
     detections = []
     multiplexers = list(local_muxes)
 

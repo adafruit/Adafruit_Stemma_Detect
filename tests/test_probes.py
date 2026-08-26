@@ -408,9 +408,7 @@ class ProbeTests(unittest.TestCase):
         )
         self.assertIsNone(module.probe(unknown_product, 0x49).name)
 
-        blank_version = CommandBus(
-            {b"\x00\x01": b"\x88", b"\x00\x02": bytes(4)}
-        )
+        blank_version = CommandBus({b"\x00\x01": b"\x88", b"\x00\x02": bytes(4)})
         self.assertIs(
             module.probe(blank_version, 0x49).confidence,
             Confidence.NO_MATCH,
