@@ -150,7 +150,10 @@ def main() -> int:
         detections, confirmed_possible = _refine_possible_matches(detections)
 
     for mux in report.multiplexers:
-        print(f"MUX: {mux.name.upper()} at 0x{mux.address:02X} ({mux.channels} channels)")
+        print(
+            f"MUX: {mux.name.upper()} at 0x{mux.address:02X}"
+            f"{_path_text(mux.path)} ({mux.channels} channels)"
+        )
 
     if not detections:
         print("No supported Adafruit STEMMA QT sensors detected.")

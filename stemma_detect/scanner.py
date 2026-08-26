@@ -9,6 +9,8 @@ from .catalog import Chip
 from .mux import Multiplexer, MuxHop, discover_multiplexers
 from .result import Confidence, ProbeResult
 
+MAX_MUX_DEPTH = 8
+
 
 @dataclass(frozen=True)
 class Detection:
@@ -127,47 +129,90 @@ def scan_all(
     chips: tuple[Chip, ...],
     *,
     diagnostic: Callable[[ProbeDiagnostic], None] | None = None,
+    max_mux_depth: int = MAX_MUX_DEPTH,
 ) -> ScanReport:
-    """Scan the root bus and every channel of conservatively detected muxes."""
+    """Scan the root bus and recursively traverse compatible mux channels."""
 
-    multiplexers = discover_multiplexers(bus)
-    if not multiplexers:
-        return ScanReport(scan(bus, chips, diagnostic=diagnostic))
+    if max_mux_depth < 0:
+        raise ValueError("maximum mux depth must not be negative")
 
+    detections, multiplexers = _scan_segment(
+        bus,
+        chips,
+        diagnostic=diagnostic,
+        path=(),
+        upstream_mux_addresses=frozenset(),
+        inherited_devices=frozenset(),
+        max_mux_depth=max_mux_depth,
+    )
+    return ScanReport(tuple(detections), tuple(multiplexers))
+
+
+def _scan_segment(
+    bus: I2CBusProtocol,
+    chips: tuple[Chip, ...],
+    *,
+    diagnostic: Callable[[ProbeDiagnostic], None] | None,
+    path: tuple[MuxHop, ...],
+    upstream_mux_addresses: frozenset[int],
+    inherited_devices: frozenset[tuple[str, int]],
+    max_mux_depth: int,
+) -> tuple[list[Detection], list[Multiplexer]]:
+    """Scan one electrically visible segment and descend through its muxes."""
+
+    local_muxes = [
+        replace(mux, path=path)
+        for mux in discover_multiplexers(
+            bus,
+            excluded_addresses=upstream_mux_addresses,
+        )
+    ]
+    visible_mux_addresses = upstream_mux_addresses | frozenset(
+        mux.address for mux in local_muxes
+    )
     detections = []
+    multiplexers = list(local_muxes)
+
     try:
-        for mux in multiplexers:
+        for mux in local_muxes:
             mux.disable(bus)
 
-        mux_addresses = frozenset(mux.address for mux in multiplexers)
-        root_detections = scan(
+        segment_detections = scan(
             bus,
             chips,
             diagnostic=diagnostic,
-            excluded_addresses=mux_addresses,
+            path=path,
+            excluded_addresses=visible_mux_addresses,
         )
-        detections.extend(root_detections)
-        root_devices = {(item.name, item.address) for item in root_detections}
+        segment_detections = tuple(
+            item
+            for item in segment_detections
+            if (item.name, item.address) not in inherited_devices
+        )
+        detections.extend(segment_detections)
+        descendant_inherited = inherited_devices | frozenset(
+            (item.name, item.address) for item in segment_detections
+        )
 
-        for mux in multiplexers:
-            for channel in range(mux.channels):
-                mux.select(bus, channel)
-                path = (MuxHop(mux.address, channel),)
-                channel_detections = scan(
-                    bus,
-                    chips,
-                    diagnostic=diagnostic,
-                    path=path,
-                    excluded_addresses=mux_addresses,
-                )
-                detections.extend(
-                    item
-                    for item in channel_detections
-                    if (item.name, item.address) not in root_devices
-                )
-                mux.disable(bus)
+        if len(path) < max_mux_depth:
+            for mux in local_muxes:
+                for channel in range(mux.channels):
+                    mux.select(bus, channel)
+                    child_path = path + (MuxHop(mux.address, channel),)
+                    child_detections, child_muxes = _scan_segment(
+                        bus,
+                        chips,
+                        diagnostic=diagnostic,
+                        path=child_path,
+                        upstream_mux_addresses=visible_mux_addresses,
+                        inherited_devices=descendant_inherited,
+                        max_mux_depth=max_mux_depth,
+                    )
+                    detections.extend(child_detections)
+                    multiplexers.extend(child_muxes)
+                    mux.disable(bus)
     finally:
-        for mux in multiplexers:
+        for mux in local_muxes:
             mux.restore(bus)
 
-    return ScanReport(tuple(detections), multiplexers)
+    return detections, multiplexers

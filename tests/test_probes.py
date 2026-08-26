@@ -191,23 +191,30 @@ class ProbeTests(unittest.TestCase):
             ("ccs811", 0x5A, b"\x81"),
             ("dps310", 0x77, b"\x10"),
             ("ens160", 0x53, b"\x60\x01"),
+            ("fxas21002c", 0x21, b"\xd7"),
+            ("fxos8700", 0x1F, b"\xc7"),
             ("guvx_i2c", 0x39, b"\x62"),
             ("hts221", 0x5F, b"\xbc"),
             ("icm20x", 0x69, b"\xea"),
             ("lis2mdl", 0x1E, b"\x40"),
             ("lis331", 0x18, b"\x32"),
             ("lis3mdl", 0x1C, b"\x3d"),
+            ("lsm303dlh_mag", 0x1E, b"H43"),
             ("lsm6ds", 0x6A, b"\x6c"),
             ("lsm9ds1", 0x6B, b"\x68"),
             ("max1704x", 0x36, b"\x00\x11"),
             ("mcp9600", 0x67, b"\x40\x01"),
             ("mmc56x3", 0x30, b"\x10"),
+            ("mma8451", 0x1D, b"\x1a"),
+            ("mpl3115a2", 0x60, b"\xc4"),
             ("msa301", 0x26, b"\x13"),
             ("qmc5883p", 0x3C, b"\x80"),
             ("si1145", 0x60, b"\x45\x00\x08"),
             ("tcs3430", 0x39, b"\xdc"),
             ("tcs34725", 0x29, b"\x44"),
             ("tmp117", 0x48, b"\x01\x17"),
+            ("tmp006", 0x40, b"\x00\x67"),
+            ("tmp007", 0x40, b"\x00\x78"),
             ("tsl2591", 0x29, b"\x50"),
             ("tsl2561", 0x39, b"\x5a"),
             ("lps28", 0x5C, b"\xb4"),
@@ -228,6 +235,92 @@ class ProbeTests(unittest.TestCase):
                     module.probe(FakeBus(bytes(len(response))), address).confidence,
                     Confidence.NO_MATCH,
                 )
+
+    def test_legacy_motion_sensor_ambiguity_and_paired_identity(self):
+        l3gd20 = importlib.import_module("stemma_detect.chips.l3gd20")
+        self.assertIs(l3gd20.probe(FakeBus(b"\xd7"), 0x6B).confidence, Confidence.MATCH)
+        self.assertIs(l3gd20.probe(FakeBus(b"\xd4"), 0x6B).confidence, Confidence.POSSIBLE)
+        self.assertIs(l3gd20.probe(FakeBus(b"\xd4"), 0x6A).confidence, Confidence.MATCH)
+
+        lsm9ds0 = importlib.import_module("stemma_detect.chips.lsm9ds0")
+
+        class PairedBus:
+            def read_register(self, address, register, length):
+                return {(0x1D, 0x0F): b"\x49", (0x6B, 0x0F): b"\xd4"}[(address, register)]
+
+        result = lsm9ds0.probe(PairedBus(), 0x6B)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (16, 16))
+
+    def test_htu21d_electronic_id(self):
+        module = importlib.import_module("stemma_detect.chips.htu21d")
+        words = (b"\x32\x12", b"\x34\x56")
+        response = b"".join(word + bytes((_sensirion.crc8(word),)) for word in words)
+
+        self.assertIs(module.probe(FakeBus(response), 0x40).confidence, Confidence.MATCH)
+        wrong_model = module.probe(FakeBus(response.replace(b"\x32", b"\x15", 1)), 0x40)
+        self.assertIs(wrong_model.confidence, Confidence.NO_MATCH)
+
+    def test_as7343_restores_register_bank(self):
+        module = importlib.import_module("stemma_detect.chips.as7343")
+
+        class BankBus:
+            def __init__(self):
+                self.writes = []
+
+            def read_register(self, _address, register, _length):
+                return {0xBF: b"\x20", 0x58: b"\x01\x02\x81"}[register]
+
+            def write(self, _address, data):
+                self.writes.append(data)
+
+        bus = BankBus()
+        result = module.probe(bus, 0x39)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(bus.writes, [b"\xbf\x30", b"\xbf\x20"])
+
+    def test_crc_protected_ags02ma_firmware(self):
+        module = importlib.import_module("stemma_detect.chips.ags02ma")
+        firmware = b"\x00\x01\x02\x03"
+        response = firmware + bytes((_sensirion.crc8(firmware),))
+
+        self.assertIs(module.probe(FakeBus(response), 0x1A).confidence, Confidence.MATCH)
+        bad_crc = module.probe(FakeBus(response[:-1] + b"\x00"), 0x1A)
+        self.assertIs(bad_crc.confidence, Confidence.NO_MATCH)
+
+    def test_am2320_crc_protected_identity(self):
+        module = importlib.import_module("stemma_detect.chips.am2320")
+        payload = b"\x03\x07\x00\x03\x01\x12\x34\x56\x78"
+        response = payload + module._crc16(payload).to_bytes(2, "little")
+
+        result = module.probe(FakeBus(response), 0x5C)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (14, 14))
+
+    def test_mlx90614_factory_id_pec(self):
+        module = importlib.import_module("stemma_detect.chips.mlx90614")
+
+        class PecBus:
+            def read_register(self, address, register, _length):
+                data = bytes((register, register ^ 0x5A))
+                pec_input = bytes((address << 1, register, address << 1 | 1)) + data
+                return data + bytes((module._pec(pec_input),))
+
+        result = module.probe(PecBus(), 0x5A)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (16, 16))
+
+    def test_new_structural_possible_probes(self):
+        cases = (
+            ("max44009", RegisterBus({0x02: b"\x80", 0x03: b"\x12\x03"}), 0x4A),
+            ("mpl115a2", FakeBus(b"\x12\x34\x56\x78\x9a\xbc\xde\xf0"), 0x60),
+            ("tc74", RegisterBus({0x00: b"\x19", 0x01: b"\x40"}), 0x48),
+            ("lidarlite", FakeBus(b"\x12\x34"), 0x62),
+        )
+        for name, bus, address in cases:
+            module = importlib.import_module(f"stemma_detect.chips.{name}")
+            with self.subTest(name=name):
+                self.assertIs(module.probe(bus, address).confidence, Confidence.POSSIBLE)
 
     def test_tmag5273_manufacturer_and_version(self):
         module = importlib.import_module("stemma_detect.chips.tmag5273")

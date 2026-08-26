@@ -14,6 +14,7 @@ class Multiplexer:
     address: int
     channels: int
     original_control: int
+    path: tuple[MuxHop, ...] = ()
 
     @property
     def name(self) -> str:
@@ -43,9 +44,12 @@ def probe_multiplexer(bus: I2CBusProtocol, address: int) -> Multiplexer | None:
     """Actively verify mux control-byte behavior and restore its original state."""
 
     original = bus.read(address, 1)
-    if len(original) != 1 or original[0] > 0x0F:
+    if len(original) != 1 or (
+        original[0] > 0x0F and original[0] not in (0x10, 0x20, 0x40, 0x80)
+    ):
         # A fresh four- or eight-channel mux normally has no channels selected.
-        # Restricting the initial value avoids writing to most unrelated devices.
+        # Also permit one selected high channel on an eight-channel mux, while
+        # restricting the initial value enough to avoid most unrelated devices.
         return None
 
     changed = False
@@ -74,11 +78,17 @@ def probe_multiplexer(bus: I2CBusProtocol, address: int) -> Multiplexer | None:
             bus.write(address, original)
 
 
-def discover_multiplexers(bus: I2CBusProtocol) -> tuple[Multiplexer, ...]:
+def discover_multiplexers(
+    bus: I2CBusProtocol,
+    *,
+    excluded_addresses: frozenset[int] = frozenset(),
+) -> tuple[Multiplexer, ...]:
     """Find standard-address PCA9546/PCA9548-compatible muxes."""
 
     found = []
     for address in MUX_ADDRESSES:
+        if address in excluded_addresses:
+            continue
         try:
             mux = probe_multiplexer(bus, address)
         except (OSError, RuntimeError, ValueError):
