@@ -152,7 +152,13 @@ class CatalogTests(unittest.TestCase):
     def test_probe_risk_is_loaded(self):
         chips = {chip.name: chip for chip in discover_chips()}
 
-        self.assertIs(chips["as5600"].probe_risk, ProbeRisk.PASSIVE)
+        self.assertIs(chips["as5600"].probe_risk, ProbeRisk.REGISTER)
+        self.assertIs(chips["as726x"].probe_risk, ProbeRisk.COMMAND)
+        self.assertIs(chips["htu31d"].probe_risk, ProbeRisk.COMMAND)
+        self.assertIs(chips["lps35hw"].probe_risk, ProbeRisk.REGISTER)
+        self.assertIs(chips["mlx90393"].probe_risk, ProbeRisk.COMMAND)
+        self.assertIs(chips["mlx90640"].probe_risk, ProbeRisk.COMMAND)
+        self.assertIs(chips["ms8607"].probe_risk, ProbeRisk.COMMAND)
         self.assertIs(chips["bme280"].probe_risk, ProbeRisk.REGISTER)
         self.assertIs(chips["vl53l4cd"].probe_risk, ProbeRisk.COMMAND)
 

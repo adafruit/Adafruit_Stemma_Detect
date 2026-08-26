@@ -187,6 +187,7 @@ class ProbeTests(unittest.TestCase):
             ("adt7410", 0x48, b"\xcb"),
             ("apds9999", 0x39, b"\xc2"),
             ("as7341", 0x39, b"\x24"),
+            ("as7331", 0x74, b"\x21"),
             ("bmp5xx", 0x47, b"\x51"),
             ("ccs811", 0x5A, b"\x81"),
             ("dps310", 0x77, b"\x10"),
@@ -312,15 +313,171 @@ class ProbeTests(unittest.TestCase):
 
     def test_new_structural_possible_probes(self):
         cases = (
+            (
+                "as5600",
+                RegisterBus(
+                    {
+                        0x00: b"\x02",
+                        0x0B: b"\x20",
+                        0x0C: b"\x0a\xbc",
+                        0x0E: b"\x01\x23",
+                    }
+                ),
+                0x36,
+            ),
+            ("htu31d", CommandBus({b"\x0a": b"\x12\x34\x56\x78"}), 0x40),
+            (
+                "ina219",
+                RegisterBus({0x00: b"\x39\x9f", 0x02: b"\x61\xa2"}),
+                0x40,
+            ),
             ("max44009", RegisterBus({0x02: b"\x80", 0x03: b"\x12\x03"}), 0x4A),
             ("mpl115a2", FakeBus(b"\x12\x34\x56\x78\x9a\xbc\xde\xf0"), 0x60),
+            (
+                "pct2075",
+                RegisterBus({0x00: b"\x19\x00", 0x01: b"\x00", 0x04: b"\x05"}),
+                0x37,
+            ),
             ("tc74", RegisterBus({0x00: b"\x19", 0x01: b"\x40"}), 0x48),
             ("lidarlite", FakeBus(b"\x12\x34"), 0x62),
+            ("mlx90393", CommandBus({b"\x50\x90": b"\x03\xb6\x68"}), 0x0C),
+            ("mlx90640", CommandBus({b"\x24\x07": b"\x12\x34\x56\x78\x9a\xbc"}), 0x33),
+            (
+                "mpr121",
+                RegisterBus(
+                    {
+                        0x00: b"\x03\x00",
+                        0x04: b"\x23\x01" * 12,
+                        0x5E: b"\x8c",
+                    }
+                ),
+                0x5A,
+            ),
+            ("mprls", FakeBus(b"\x20"), 0x18),
+            (
+                "veml7700",
+                RegisterBus({0x00: b"\x00\x00", 0x03: b"\x00\x00", 0x06: b"\x00\xc0"}),
+                0x10,
+            ),
         )
         for name, bus, address in cases:
             module = importlib.import_module(f"stemma_detect.chips.{name}")
             with self.subTest(name=name):
                 self.assertIs(module.probe(bus, address).confidence, Confidence.POSSIBLE)
+
+    def test_structural_possible_probes_reject_reserved_bits(self):
+        cases = (
+            (
+                "as5600",
+                RegisterBus({0x00: b"\x00", 0x0B: b"\x01", 0x0C: b"\x00\x00", 0x0E: b"\x00\x00"}),
+                0x36,
+            ),
+            ("ina219", RegisterBus({0x00: b"\x79\x9f", 0x02: b"\x00\x00"}), 0x40),
+            (
+                "pct2075",
+                RegisterBus({0x00: b"\x19\x01", 0x01: b"\x00", 0x04: b"\x05"}),
+                0x37,
+            ),
+            (
+                "veml7700",
+                RegisterBus({0x00: b"\x04\x00", 0x03: b"\x00\x00", 0x06: b"\x00\x00"}),
+                0x10,
+            ),
+            (
+                "mpr121",
+                RegisterBus(
+                    {
+                        0x00: b"\x00\x10",
+                        0x04: b"\x00\x00" * 12,
+                        0x5E: b"\x00",
+                    }
+                ),
+                0x5A,
+            ),
+            ("mprls", FakeBus(b"\x02"), 0x18),
+            ("mlx90393", CommandBus({b"\x50\x90": b"\x00\xb6\x68"}), 0x0C),
+        )
+        for name, bus, address in cases:
+            module = importlib.import_module(f"stemma_detect.chips.{name}")
+            with self.subTest(name=name):
+                self.assertIs(module.probe(bus, address).confidence, Confidence.NO_MATCH)
+
+    def test_as726x_virtual_hardware_identity(self):
+        module = importlib.import_module("stemma_detect.chips.as726x")
+
+        class VirtualBus:
+            def __init__(self, values):
+                self.status = iter((0, 1, 0, 1))
+                self.values = iter(values)
+                self.writes = []
+
+            def read_register(self, _address, register, _length):
+                if register == 0x00:
+                    return bytes((next(self.status),))
+                if register == 0x02:
+                    return bytes((next(self.values),))
+                raise AssertionError(f"unexpected register: {register:#x}")
+
+            def write(self, _address, data):
+                self.writes.append(data)
+
+        bus = VirtualBus((0x40, 0x3E))
+        result = module.probe(bus, 0x49)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (14, 14))
+        self.assertEqual(bus.writes, [b"\x01\x00", b"\x01\x01"])
+
+        invalid = module.probe(VirtualBus((0x40, 0x00)), 0x49)
+        self.assertIs(invalid.confidence, Confidence.NO_MATCH)
+
+    def test_ms8607_paired_prom_crc_identity(self):
+        module = importlib.import_module("stemma_detect.chips.ms8607")
+
+        pressure_prom = [0x0000, 0x1234, 0x5678, 0x9ABC, 0x1357, 0x2468, 0x369C]
+        pressure_prom[0] |= module._crc4(tuple(pressure_prom), crc_word=0, crc_mask=0x0FFF) << 12
+        humidity_prom = [0x1234, 0x5678, 0x9ABC, 0x1357, 0x2468, 0x3690, 0xACE0]
+        humidity_prom[6] |= module._crc4(tuple(humidity_prom), crc_word=6, crc_mask=0xFFF0)
+
+        class PromBus:
+            def __init__(self, pressure, humidity):
+                self.proms = {0x76: pressure, 0x40: humidity}
+
+            def write_then_read(self, address, command, _length, *, delay_ms=0):
+                index = (command[0] - 0xA0) // 2
+                return self.proms[address][index].to_bytes(2, "big")
+
+        result = module.probe(PromBus(pressure_prom, humidity_prom), 0x76)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual((result.score, result.max_score), (18, 18))
+
+        humidity_prom[6] ^= 0x01
+        invalid = module.probe(PromBus(pressure_prom, humidity_prom), 0x76)
+        self.assertIs(invalid.confidence, Confidence.NO_MATCH)
+
+    def test_lps35hw_shared_exact_id_stays_possible(self):
+        module = importlib.import_module("stemma_detect.chips.lps35hw")
+
+        result = module.probe(FakeBus(b"\xb1"), 0x5D)
+        self.assertIs(result.confidence, Confidence.POSSIBLE)
+        self.assertEqual((result.score, result.max_score), (8, 10))
+        self.assertIs(
+            module.probe(FakeBus(b"\x00"), 0x5D).confidence,
+            Confidence.NO_MATCH,
+        )
+
+    def test_pa1010d_nmea_checksum_identity(self):
+        module = importlib.import_module("stemma_detect.chips.pa1010d")
+        sentence = b"$GPGGA,123519,4807.038,N,01131.000,E,1,08*77\r\n"
+
+        result = module.probe(FakeBus(b"partial" + sentence + b"\x0a" * 40), 0x10)
+        self.assertIs(result.confidence, Confidence.MATCH)
+        self.assertEqual(result.evidence["sentence_type"], "GPGGA")
+
+        invalid = sentence.replace(b"*77", b"*00")
+        self.assertIs(
+            module.probe(FakeBus(invalid), 0x10).confidence,
+            Confidence.NO_MATCH,
+        )
 
     def test_tmag5273_manufacturer_and_version(self):
         module = importlib.import_module("stemma_detect.chips.tmag5273")
