@@ -25,3 +25,7 @@ Install drivers for definitive matches::
 Prompt before installing drivers for possible matches::
 
    stemma-scan --bus 1 --install --prompt-possible-matches
+
+Return a versioned, machine-readable scan report::
+
+   stemma-scan --bus 1 --json

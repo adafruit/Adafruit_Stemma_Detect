@@ -143,6 +143,31 @@ installing drivers. Applications can supply an already-open object implementing
     for detection in report.detections:
         print(detection.name, detection.address, detection.path)
 
+JSON output
+===========
+
+Use ``--json`` to write one machine-readable document to standard output. It contains the bus,
+multiplexer topology, detections, confidence, signature evidence and scores, and CircuitPython
+driver installation status. Both integer and hexadecimal forms of each I²C address are included:
+
+.. code-block:: shell
+
+    .venv/bin/stemma-scan --bus 1 --json
+    .venv/bin/stemma-scan --bus 1 --json > stemma-scan.json
+
+The top-level ``schema_version`` is incremented if a future release makes an incompatible output
+change. JSON mode cannot be combined with ``--install`` or ``--diagnostics`` because prompts,
+installation progress, and transaction traces would make standard output invalid JSON.
+
+Library users can serialize an existing report without running another scan:
+
+.. code-block:: python
+
+    from stemma_detect import report_to_dict, report_to_json
+
+    data = report_to_dict(report, bus=1)
+    text = report_to_json(report, bus=1)
+
 Diagnostics
 ===========
 

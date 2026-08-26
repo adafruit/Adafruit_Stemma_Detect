@@ -1,6 +1,7 @@
 import contextlib
 import io
 import unittest
+from argparse import Namespace
 from unittest.mock import patch
 
 from stemma_detect.bus import I2CTransaction
@@ -11,10 +12,11 @@ from stemma_detect.cli import (
     _print_diagnostic,
     _print_transaction,
     _refine_possible_matches,
+    main,
 )
 from stemma_detect.mux import MuxHop
 from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
-from stemma_detect.scanner import Detection, ProbeDiagnostic
+from stemma_detect.scanner import Detection, ProbeDiagnostic, ScanReport
 
 
 def _possible_detection():
@@ -54,6 +56,39 @@ def _ranked_possible_detection(default_address):
 class CliTests(unittest.TestCase):
     def test_diagnostics_argument(self):
         self.assertTrue(_arguments(["--diagnostics"]).diagnostics)
+
+    def test_json_argument(self):
+        self.assertTrue(_arguments(["--json"]).json)
+
+    def test_json_rejects_text_output_modes(self):
+        for arguments in (("--json", "--diagnostics"), ("--json", "--install")):
+            with (
+                self.subTest(arguments=arguments),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                _arguments(arguments)
+
+    def test_json_mode_prints_only_serialized_report(self):
+        arguments = Namespace(
+            bus=1,
+            diagnostics=False,
+            install=False,
+            prompt_possible_matches=False,
+            json=True,
+        )
+        output = io.StringIO()
+        with (
+            patch("stemma_detect.cli._arguments", return_value=arguments),
+            patch("stemma_detect.cli.discover_chips", return_value=()),
+            patch("stemma_detect.cli.I2CBus"),
+            patch("stemma_detect.cli.scan_all", return_value=ScanReport(())),
+            patch("stemma_detect.cli.report_to_json", return_value='{"schema_version": 1}'),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(main(), 0)
+
+        self.assertEqual(output.getvalue(), '{"schema_version": 1}\n')
 
     def test_prompt_possible_requires_install(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):

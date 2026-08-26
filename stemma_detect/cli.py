@@ -11,6 +11,7 @@ from .mux import MuxHop
 from .result import Confidence
 from .runtime import SHELL
 from .scanner import Detection, ProbeDiagnostic, scan_all
+from .serialization import report_to_json
 
 
 def _path_text(path: tuple[MuxHop, ...]) -> str:
@@ -45,9 +46,18 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="show every probe result and I2C error",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="write the scan report as machine-readable JSON",
+    )
     args = parser.parse_args(argv)
     if args.prompt_possible_matches and not args.install:
         parser.error("--prompt-possible-matches requires --install")
+    if args.json and args.install:
+        parser.error("--json cannot be combined with --install")
+    if args.json and args.diagnostics:
+        parser.error("--json cannot be combined with --diagnostics")
     return args
 
 
@@ -144,6 +154,10 @@ def main() -> int:
             diagnostic=_print_diagnostic if args.diagnostics else None,
         )
         detections = report.detections
+
+    if args.json:
+        print(report_to_json(report, bus=args.bus))
+        return 0
 
     confirmed_possible = set()
     if args.install and args.prompt_possible_matches:
