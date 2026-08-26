@@ -192,23 +192,23 @@ also consult Adafruit's `I²C clock stretching guide
 Supported sensors so far
 ========================
 
-The catalog currently contains 91 sensor definitions: 66 with definitive-capable probes and 25 that
+The catalog currently contains 97 sensor definitions: 70 with definitive-capable probes and 27 that
 produce possible matches. Possible matches are never installed without
 ``--prompt-possible-matches`` and user confirmation.
 
 Sensors with definitive probes include ADT7410, APDS9960, APDS9999, AS7341, BME280, BME680, BMP280,
-BMP3xx, BMP5xx, BNO055, CCS811, DPS310, ENS160, HDC302x, HTS221, ICM20x, INA228,
+BMP3xx, BMP5xx, BNO055, CCS811, DPS310, ENS160, GUVX I2C, HDC302x, HTS221, ICM20x, INA228,
 INA237/INA238, INA260, INA3221, LC709203F, LIS2MDL, LIS331, LIS3DH, LIS3MDL, LPS2x,
 LPS28, LSM6DS, LSM9DS1, LTR329/LTR303, LTR390, MAX1704x, MCP9600, MCP9808, MLX90632,
 MMC5603, MPU6050, MSA301, OPT4048, PMSA003I, QMC5883P, SCD30, SCD4x, SEN6x,
-SGP30, SGP40, SGP41, SHT31D, SHT4x, SHTC3, Si7021, SPA06-003, STCC4,
-STHS34PF80, TCS34725, TMP117/TMP119, TSL2591, VCNL4020, VCNL4030, VCNL4040,
+SGP30, SGP40, SGP41, SHT31D, SHT4x, SHTC3, SI1145, Si7021, SPA06-003, STCC4,
+STHS34PF80, TCS3430, TCS34725, TMAG5273, TMP117/TMP119, TSL2561, TSL2591, VCNL4030, VCNL4040,
 VCNL4200, VEML6075, VL53L0X, VL53L1X, VL53L4CD, and VL6180X.
 
 Possible-match definitions include ADXL34x, ADXL37x, AHTx0, AS5600, AS726x, AS7331,
 BH1750, BNO08x, DS3502, HTU31D, INA219, LPS35HW, LSM303 accelerometer,
 MCP3421, MLX90393, MLX90640, MPR121, MPRLS, MS8607, PA1010D, PCF8591, PCT2075,
-TLV493D, TSC2007, and VEML7700.
+TLV493D, TSC2007, VCNL4010, VCNL4020, and VEML7700.
 
 Adding a sensor
 ===============

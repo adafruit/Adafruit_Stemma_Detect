@@ -191,6 +191,7 @@ class ProbeTests(unittest.TestCase):
             ("ccs811", 0x5A, b"\x81"),
             ("dps310", 0x77, b"\x10"),
             ("ens160", 0x53, b"\x60\x01"),
+            ("guvx_i2c", 0x39, b"\x62"),
             ("hts221", 0x5F, b"\xbc"),
             ("icm20x", 0x69, b"\xea"),
             ("lis2mdl", 0x1E, b"\x40"),
@@ -203,14 +204,16 @@ class ProbeTests(unittest.TestCase):
             ("mmc56x3", 0x30, b"\x10"),
             ("msa301", 0x26, b"\x13"),
             ("qmc5883p", 0x3C, b"\x80"),
+            ("si1145", 0x60, b"\x45\x00\x08"),
+            ("tcs3430", 0x39, b"\xdc"),
             ("tcs34725", 0x29, b"\x44"),
             ("tmp117", 0x48, b"\x01\x17"),
             ("tsl2591", 0x29, b"\x50"),
+            ("tsl2561", 0x39, b"\x5a"),
             ("lps28", 0x5C, b"\xb4"),
             ("opt4048", 0x44, b"\x08\x21"),
             ("spa06_003", 0x77, b"\x11"),
             ("sths34pf80", 0x5A, b"\xd3"),
-            ("vcnl4020", 0x13, b"\x21"),
             ("vcnl4030", 0x60, b"\x80\x42"),
             ("vcnl4200", 0x51, b"\x58\x10"),
             ("vl53l1x", 0x29, b"\xea\xcc\x10"),
@@ -223,6 +226,34 @@ class ProbeTests(unittest.TestCase):
                 self.assertIs(module.probe(FakeBus(response), address).confidence, Confidence.MATCH)
                 self.assertIs(
                     module.probe(FakeBus(bytes(len(response))), address).confidence,
+                    Confidence.NO_MATCH,
+                )
+
+    def test_tmag5273_manufacturer_and_version(self):
+        module = importlib.import_module("stemma_detect.chips.tmag5273")
+
+        for version in (1, 2):
+            result = module.probe(
+                RegisterBus({0x0D: bytes((version,)), 0x0E: b"\x49\x54"}),
+                0x35,
+            )
+            with self.subTest(version=version):
+                self.assertIs(result.confidence, Confidence.MATCH)
+                self.assertEqual(result.name, f"tmag5273_a{version}")
+                self.assertEqual((result.score, result.max_score), (14, 14))
+
+        invalid = module.probe(RegisterBus({0x0D: b"\x01", 0x0E: b"\x00\x00"}), 0x35)
+        self.assertIs(invalid.confidence, Confidence.NO_MATCH)
+
+    def test_vcnl401x_shared_id_stays_possible_across_drivers(self):
+        for name in ("vcnl4010", "vcnl4020"):
+            module = importlib.import_module(f"stemma_detect.chips.{name}")
+            with self.subTest(name=name):
+                result = module.probe(FakeBus(b"\x21"), 0x13)
+                self.assertIs(result.confidence, Confidence.POSSIBLE)
+                self.assertEqual((result.score, result.max_score), (8, 10))
+                self.assertIs(
+                    module.probe(FakeBus(b"\x00"), 0x13).confidence,
                     Confidence.NO_MATCH,
                 )
 

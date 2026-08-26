@@ -1,7 +1,7 @@
 from stemma_detect.result import Confidence, ProbeResult
 
 ADDRESSES = (0x13,)
-PACKAGE = "adafruit-circuitpython-vcnl4020"
+PACKAGE = "adafruit-circuitpython-vcnl4010"
 PROBE_CONFIDENCE = Confidence.POSSIBLE
 
 
