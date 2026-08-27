@@ -2,7 +2,7 @@ Introduction
 ============
 
 .. image:: https://readthedocs.org/projects/adafruit-stemma-detect/badge/?version=latest
-    :target: https://circuitpython.readthedocs.io/projects/stemma-detect/en/latest/
+    :target: https://docs.circuitpython.org/projects/stemma-detect/en/latest/
     :alt: Documentation Status
 
 .. image:: https://img.shields.io/discord/327254708534116352.svg

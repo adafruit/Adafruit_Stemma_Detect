@@ -36,5 +36,5 @@ Add unit tests for the expected response and at least one non-matching response.
 ## Releases
 
 See [VERSIONING.md](VERSIONING.md) for the versioning policy and release procedure. Releases are
-published from GitHub through PyPI Trusted Publishing; do not store a PyPI API token in the
-repository.
+published from GitHub using Adafruit's organization-managed PyPI credentials; do not store PyPI
+credentials in the repository.

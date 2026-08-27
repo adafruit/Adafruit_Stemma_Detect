@@ -26,27 +26,22 @@ the JSON schema documents that change in the changelog.
 3. Update `stemma_detect/_version.py` and the changelog comparison links.
 4. Build the wheel and source distribution, run `twine check`, and inspect their files.
 5. Commit the release, create tag `vMAJOR.MINOR.PATCH`, and publish a GitHub release.
-6. Approve the protected GitHub `pypi` environment deployment. The release workflow
-   verifies the tag, rebuilds the distributions, and publishes with PyPI Trusted
-   Publishing.
+6. The release workflow verifies the tag, rebuilds the distributions, and publishes
+   using the Adafruit organization's PyPI credentials.
 7. Install the exact version from PyPI in a fresh environment and run an import and CLI
    smoke test.
 
 PyPI release files are immutable. If a release is incorrect, publish a new version; do
 not attempt to replace an existing file.
 
-## One-time PyPI setup
+## PyPI configuration
 
-After transferring the repository, coordinate the first release with the Adafruit
-maintainers. If the project uses GitHub Trusted Publishing, create a pending publisher at
-<https://pypi.org/manage/account/publishing/> with these values:
+The release workflow follows the convention used by Adafruit's other Python repositories
+and reads these organization-managed GitHub Actions secrets:
 
-- PyPI project name: `adafruit-stemma-detect`
-- GitHub owner: `adafruit`
-- GitHub repository: `Adafruit_Stemma_Detect`
-- Workflow filename: `release.yml`
-- Environment name: `pypi`
+- `pypi_username`
+- `pypi_password`
 
-Create a matching `pypi` environment in the GitHub repository and require a maintainer's
-approval before deployment. Do not configure the publisher before the transfer, because
-the repository owner must exactly match the owner in the publishing workflow's identity.
+Do not add PyPI credentials as repository secrets or commit them to the repository. Before
+the first release, confirm that this repository has access to the Adafruit organization
+secrets.
