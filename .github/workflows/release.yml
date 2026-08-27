@@ -17,12 +17,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Set package version from release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: sed -i -e "s/0.0.0+auto.0/${RELEASE_TAG}/" stemma_detect/_version.py
       - name: Verify release tag matches package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: >-
           python -c 'import os; from stemma_detect import __version__;
-          actual = os.environ["RELEASE_TAG"]; expected = f"v{__version__}";
+          actual = os.environ["RELEASE_TAG"]; expected = __version__;
           assert actual == expected, f"tag {actual} does not match version {__version__}"'
       - name: Build and verify distributions
         run: |

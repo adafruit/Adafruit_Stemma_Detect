@@ -19,9 +19,6 @@ Introduction
 
 Detect selected Adafruit STEMMA QT sensors on a Raspberry Pi and optionally install their CircuitPython drivers. It recognizes only sensors with bundled probe modules; it is not a universal I²C device identifier.
 
-See the `changelog <CHANGELOG.md>`_ for release notes and `versioning policy
-<VERSIONING.md>`_ for compatibility and release procedures.
-
 Each sensor definition contains only:
 
 - ``ADDRESSES``
