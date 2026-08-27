@@ -393,7 +393,7 @@ Contributing
 ============
 
 Contributions are welcome! Please read our `Code of Conduct
-<https://github.com/adafruit/Adafruit_Stemma_Detect/blob/master/CODE_OF_CONDUCT.md>`_
+<https://github.com/adafruit/Adafruit_Stemma_Detect/blob/main/CODE_OF_CONDUCT.md>`_
 before contributing to help this project stay welcoming
 
 License

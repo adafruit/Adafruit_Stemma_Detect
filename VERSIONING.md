@@ -37,15 +37,16 @@ not attempt to replace an existing file.
 
 ## One-time PyPI setup
 
-Before publishing the first release, create a pending GitHub Trusted Publisher at
+After transferring the repository, coordinate the first release with the Adafruit
+maintainers. If the project uses GitHub Trusted Publishing, create a pending publisher at
 <https://pypi.org/manage/account/publishing/> with these values:
 
 - PyPI project name: `adafruit-stemma-detect`
-- GitHub owner: `makermelissa`
+- GitHub owner: `adafruit`
 - GitHub repository: `Adafruit_Stemma_Detect`
 - Workflow filename: `release.yml`
 - Environment name: `pypi`
 
 Create a matching `pypi` environment in the GitHub repository and require a maintainer's
-approval before deployment. If the repository is transferred to the Adafruit organization,
-update the PyPI Trusted Publisher to match the new GitHub owner before the next release.
+approval before deployment. Do not configure the publisher before the transfer, because
+the repository owner must exactly match the owner in the publishing workflow's identity.

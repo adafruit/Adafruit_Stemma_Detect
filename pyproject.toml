@@ -34,10 +34,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/makermelissa/Adafruit_Stemma_Detect"
-Documentation = "https://adafruit-stemma-detect.readthedocs.io/"
-Issues = "https://github.com/makermelissa/Adafruit_Stemma_Detect/issues"
-Source = "https://github.com/makermelissa/Adafruit_Stemma_Detect"
+Homepage = "https://github.com/adafruit/Adafruit_Stemma_Detect"
+Documentation = "https://circuitpython.readthedocs.io/projects/stemma-detect/en/latest/"
+Issues = "https://github.com/adafruit/Adafruit_Stemma_Detect/issues"
+Source = "https://github.com/adafruit/Adafruit_Stemma_Detect"
 
 [project.optional-dependencies]
 dev = [

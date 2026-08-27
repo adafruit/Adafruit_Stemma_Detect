@@ -29,5 +29,5 @@ Initial public release.
 - Raspberry Pi hardware validation and unit coverage for probes, mux traversal,
   serialization, installation, and CLI behavior.
 
-[Unreleased]: https://github.com/makermelissa/Adafruit_Stemma_Detect/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/makermelissa/Adafruit_Stemma_Detect/releases/tag/v0.1.0
+[Unreleased]: https://github.com/adafruit/Adafruit_Stemma_Detect/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/adafruit/Adafruit_Stemma_Detect/releases/tag/v0.1.0
