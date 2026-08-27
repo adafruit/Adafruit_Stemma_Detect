@@ -32,3 +32,9 @@ Probes must not import the driver they install. Prefer documented, read-only ide
 Definitive-capable probes run before possible-only probes when devices share an address. A definitive match prevents possible-only candidates at that address from being probed. Otherwise, all possible candidates are collected before prompting. Declined candidates are removed; once one is accepted, it is retained and the remaining candidates at that address are removed without further prompts.
 
 Add unit tests for the expected response and at least one non-matching response. When possible, also test on a Raspberry Pi with the Adafruit STEMMA QT product attached.
+
+## Releases
+
+See [VERSIONING.md](VERSIONING.md) for the versioning policy and release procedure. Releases are
+published from GitHub through PyPI Trusted Publishing; do not store a PyPI API token in the
+repository.

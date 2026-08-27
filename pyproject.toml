@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adafruit-stemma-detect"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Detect supported Adafruit STEMMA QT sensors and install their CircuitPython drivers"
 readme = "README.rst"
 requires-python = ">=3.10"
@@ -56,3 +56,6 @@ stemma-scan = "stemma_detect.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["stemma_detect*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "stemma_detect._version.__version__"}

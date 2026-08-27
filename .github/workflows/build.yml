@@ -43,6 +43,13 @@ jobs:
         run: python -m build
       - name: Check package metadata
         run: python -m twine check dist/*
+      - name: Install wheel in a clean environment
+        run: |
+          python -m venv /tmp/stemma-wheel-test
+          /tmp/stemma-wheel-test/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/stemma-wheel-test/bin/python -c "import stemma_detect; print(stemma_detect.__version__)"
+          /tmp/stemma-wheel-test/bin/stemma-scan --help
 
   docs:
     runs-on: ubuntu-latest

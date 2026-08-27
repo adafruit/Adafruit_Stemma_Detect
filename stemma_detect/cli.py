@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from importlib.metadata import PackageNotFoundError, version
 
 from .bus import I2CBus, I2CTransaction
-from .catalog import discover_chips
-from .installer import install
+from .installer import InstallOutcome, create_install_plan, driver_version, install_drivers
 from .mux import MuxHop
 from .result import Confidence
 from .runtime import SHELL
-from .scanner import Detection, ProbeDiagnostic, scan_all
+from .scanner import Detection, ProbeDiagnostic, ScanReport, scan_all
 from .serialization import report_to_json
 
 
@@ -59,13 +57,6 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.json and args.diagnostics:
         parser.error("--json cannot be combined with --diagnostics")
     return args
-
-
-def _installed_version(package: str) -> str | None:
-    try:
-        return version(package)
-    except PackageNotFoundError:
-        return None
 
 
 def _confirm_possible(detection: Detection) -> bool:
@@ -142,15 +133,12 @@ def _refine_possible_matches(
 
 def main() -> int:
     args = _arguments()
-    chips = discover_chips()
-
     with I2CBus(
         args.bus,
         trace=_print_transaction if args.diagnostics else None,
     ) as bus:
         report = scan_all(
             bus,
-            chips,
             diagnostic=_print_diagnostic if args.diagnostics else None,
         )
         detections = report.detections
@@ -184,20 +172,23 @@ def main() -> int:
             if detection.result.score is not None:
                 fields.append(f"score={detection.result.score}/{detection.result.max_score}")
             print(f"  {', '.join(fields)}")
-        installed = _installed_version(detection.chip.package)
+        installed = driver_version(detection.chip.package)
         if installed:
             print(f"  driver: {detection.chip.package} {installed} (installed)")
         else:
             print(f"  driver: {detection.chip.package} (not installed)")
 
     if args.install:
-        for detection in detections:
-            should_install = (
-                detection.result.confidence is Confidence.MATCH
-                or _confirmation_key(detection) in confirmed_possible
-            )
-            if should_install and _installed_version(detection.chip.package) is None:
-                print(f"Installing: {detection.chip.package}")
-                install(detection.chip)
+        plan = create_install_plan(
+            ScanReport(detections, report.multiplexers),
+            confirm_possible=lambda detection: _confirmation_key(detection) in confirmed_possible,
+        )
+        for item in plan:
+            if not item.needs_install:
+                continue
+            print(f"Installing: {item.package}")
+            result = install_drivers((item,))[0]
+            if result.outcome is InstallOutcome.FAILED:
+                raise RuntimeError(result.error)
 
     return 0

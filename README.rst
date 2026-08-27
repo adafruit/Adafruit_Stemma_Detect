@@ -20,6 +20,9 @@ Introduction
 Detect selected Adafruit STEMMA QT sensors on a Raspberry Pi and optionally install their CircuitPython drivers.
 This project is currently an alpha proof of concept. It recognizes only sensors with bundled probe modules; it is not a universal I²C device identifier.
 
+See the `changelog <CHANGELOG.md>`_ for release notes and `versioning policy
+<VERSIONING.md>`_ for compatibility and release procedures.
+
 Each sensor definition contains only:
 
 - ``ADDRESSES``
@@ -129,19 +132,67 @@ address jumpers before scanning that topology.
 Using as a library
 ==================
 
-``scan_all`` returns structured detections and multiplexer topology without printing, prompting, or
-installing drivers. Applications can supply an already-open object implementing
-``I2CBusProtocol``, or use the included Linux ``smbus2`` adapter:
+The high-level ``detect`` function opens a Raspberry Pi I²C bus, scans it and any compatible
+multiplexers, then closes the bus. It returns structured data without printing, prompting, or
+installing drivers:
 
 .. code-block:: python
 
-    from stemma_detect import I2CBus, discover_chips, scan_all
+    from stemma_detect import detect
 
-    with I2CBus(1) as bus:
-        report = scan_all(bus, discover_chips())
+    report = detect(bus_number=1)
 
-    for detection in report.detections:
-        print(detection.name, detection.address, detection.path)
+    for detection in report.matches:
+        print(detection.name, detection.address_hex, detection.driver_package)
+
+    for detection in report.possible_matches:
+        print("Needs confirmation:", detection.name)
+
+Applications that already own an I²C connection can pass any object implementing
+``I2CBusProtocol``. The built-in catalog is used automatically:
+
+.. code-block:: python
+
+    from stemma_detect import scan_all
+
+    report = scan_all(my_i2c_bus)
+
+Pass ``chips=discover_chips()`` explicitly only when filtering or extending the catalog. Both
+``detect`` and ``scan_all`` accept ``diagnostic=callback`` for applications that need every probe
+outcome.
+
+Installing drivers from a library
+=================================
+
+``create_install_plan`` automatically includes definitive matches. Possible matches are excluded
+unless the application confirms them with a callback. A script that knows its expected hardware
+can match the sensor name, address and mux path:
+
+.. code-block:: python
+
+    from stemma_detect import create_install_plan, detect, install_drivers
+
+    report = detect(1)
+    expected = {
+        ((), 0x48): "pcf8591",
+    }
+
+    def confirm_possible(sensor):
+        return expected.get((sensor.path, sensor.address)) == sensor.name
+
+    plan = create_install_plan(report, confirm_possible=confirm_possible)
+
+    for item in plan:
+        state = "installed" if item.installed_version else "not installed"
+        print(item.package, state)
+
+    results = install_drivers(plan)
+
+The callback is called only for possible matches. If it confirms two different candidates at the
+same address and mux path, planning raises ``ValueError`` instead of silently selecting one.
+Packages shared by multiple detected sensors are deduplicated. ``install_drivers`` does not print
+or prompt; it returns an ``InstallResult`` for each package with an ``InstallOutcome`` of
+``INSTALLED``, ``ALREADY_INSTALLED`` or ``FAILED``.
 
 JSON output
 ===========
@@ -163,10 +214,11 @@ Library users can serialize an existing report without running another scan:
 
 .. code-block:: python
 
-    from stemma_detect import report_to_dict, report_to_json
+    data = report.to_dict(bus=1)
+    text = report.to_json(bus=1)
 
-    data = report_to_dict(report, bus=1)
-    text = report_to_json(report, bus=1)
+The existing ``report_to_dict`` and ``report_to_json`` functions remain available for functional
+style code.
 
 Diagnostics
 ===========

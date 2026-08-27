@@ -1,8 +1,9 @@
 import unittest
+from unittest.mock import MagicMock, patch
 
 from stemma_detect.catalog import Chip
 from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
-from stemma_detect.scanner import Detection, scan
+from stemma_detect.scanner import Detection, ScanReport, detect, scan, scan_all
 
 
 class ScannerTests(unittest.TestCase):
@@ -21,6 +22,75 @@ class ScannerTests(unittest.TestCase):
         )
 
         self.assertEqual(detection.name, "bmp390")
+
+    def test_detection_exposes_common_result_fields(self):
+        chip = Chip(
+            name="bmp3xx",
+            addresses=(0x77,),
+            package="adafruit-circuitpython-bmp3xx",
+            probe=lambda _bus, _address: ProbeResult.no_match(),
+            probe_confidence=Confidence.MATCH,
+        )
+        detection = Detection(
+            chip,
+            0x77,
+            ProbeResult.match({"chip_id": "0x60"}, name="bmp390", score=8, max_score=8),
+        )
+
+        self.assertEqual(detection.family, "bmp3xx")
+        self.assertIs(detection.confidence, Confidence.MATCH)
+        self.assertTrue(detection.is_definitive)
+        self.assertEqual(detection.driver_package, "adafruit-circuitpython-bmp3xx")
+        self.assertEqual(detection.address_hex, "0x77")
+        self.assertEqual(detection.evidence, {"chip_id": "0x60"})
+        self.assertEqual((detection.score, detection.max_score), (8, 8))
+
+    def test_scan_report_is_iterable_and_separates_confidence(self):
+        chip = Chip(
+            name="sensor",
+            addresses=(0x44,),
+            package="adafruit-circuitpython-sensor",
+            probe=lambda _bus, _address: ProbeResult.no_match(),
+            probe_confidence=Confidence.MATCH,
+        )
+        matched = Detection(chip, 0x44, ProbeResult.match())
+        possible = Detection(chip, 0x45, ProbeResult.possible())
+        report = ScanReport((matched, possible))
+
+        self.assertEqual(len(report), 2)
+        self.assertEqual(tuple(report), (matched, possible))
+        self.assertEqual(report.matches, (matched,))
+        self.assertEqual(report.possible_matches, (possible,))
+
+    @patch("stemma_detect.scanner._scan_segment", return_value=([], []))
+    @patch("stemma_detect.scanner.discover_chips", return_value=())
+    def test_scan_all_uses_bundled_catalog_by_default(self, discover, scan_segment):
+        bus = object()
+        report = scan_all(bus)
+
+        self.assertEqual(report, ScanReport(()))
+        discover.assert_called_once_with()
+        self.assertEqual(scan_segment.call_args.args[:2], (bus, ()))
+
+    @patch("stemma_detect.scanner.scan_all", return_value=ScanReport(()))
+    @patch("stemma_detect.scanner.I2CBus")
+    def test_detect_manages_linux_bus_lifetime(self, bus_class, scan_all_mock):
+        opened_bus = object()
+        bus_class.return_value.__enter__.return_value = opened_bus
+        diagnostic = MagicMock()
+        trace = MagicMock()
+
+        report = detect(3, diagnostic=diagnostic, trace=trace, max_mux_depth=2)
+
+        self.assertEqual(report, ScanReport(()))
+        bus_class.assert_called_once_with(3, trace=trace)
+        bus_class.return_value.__exit__.assert_called_once()
+        scan_all_mock.assert_called_once_with(
+            opened_bus,
+            None,
+            diagnostic=diagnostic,
+            max_mux_depth=2,
+        )
 
     def test_non_matches_are_discarded(self):
         chip = Chip(

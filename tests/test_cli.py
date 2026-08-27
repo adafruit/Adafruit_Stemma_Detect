@@ -14,6 +14,7 @@ from stemma_detect.cli import (
     _refine_possible_matches,
     main,
 )
+from stemma_detect.installer import InstallOutcome, InstallPlanItem, InstallResult
 from stemma_detect.mux import MuxHop
 from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
 from stemma_detect.scanner import Detection, ProbeDiagnostic, ScanReport
@@ -28,6 +29,17 @@ def _possible_detection():
         probe_confidence=Confidence.POSSIBLE,
     )
     return Detection(chip, 0x48, ProbeResult.possible())
+
+
+def _matched_detection():
+    chip = Chip(
+        name="matched-chip",
+        addresses=(0x44,),
+        package="adafruit-circuitpython-matched",
+        probe=lambda _bus, _address: ProbeResult.match(),
+        probe_confidence=Confidence.MATCH,
+    )
+    return Detection(chip, 0x44, ProbeResult.match())
 
 
 def _named_possible_detection(name):
@@ -80,15 +92,47 @@ class CliTests(unittest.TestCase):
         output = io.StringIO()
         with (
             patch("stemma_detect.cli._arguments", return_value=arguments),
-            patch("stemma_detect.cli.discover_chips", return_value=()),
             patch("stemma_detect.cli.I2CBus"),
-            patch("stemma_detect.cli.scan_all", return_value=ScanReport(())),
+            patch("stemma_detect.cli.scan_all", return_value=ScanReport(())) as scan_all_mock,
             patch("stemma_detect.cli.report_to_json", return_value='{"schema_version": 1}'),
             contextlib.redirect_stdout(output),
         ):
             self.assertEqual(main(), 0)
 
         self.assertEqual(output.getvalue(), '{"schema_version": 1}\n')
+        scan_all_mock.assert_called_once()
+        self.assertEqual(scan_all_mock.call_args.args[1:], ())
+
+    def test_install_mode_uses_public_plan_api(self):
+        arguments = Namespace(
+            bus=1,
+            diagnostics=False,
+            install=True,
+            prompt_possible_matches=False,
+            json=False,
+        )
+        detection = _matched_detection()
+        report = ScanReport((detection,))
+        item = InstallPlanItem(detection.driver_package, (detection,))
+        result = InstallResult(
+            detection.driver_package,
+            (detection,),
+            InstallOutcome.INSTALLED,
+            version="1.0.0",
+        )
+        with (
+            patch("stemma_detect.cli._arguments", return_value=arguments),
+            patch("stemma_detect.cli.I2CBus"),
+            patch("stemma_detect.cli.scan_all", return_value=report),
+            patch("stemma_detect.cli.driver_version", return_value=None),
+            patch("stemma_detect.cli.create_install_plan", return_value=(item,)) as planner,
+            patch("stemma_detect.cli.install_drivers", return_value=(result,)) as installer,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(main(), 0)
+
+        planner.assert_called_once()
+        installer.assert_called_once_with((item,))
 
     def test_prompt_possible_requires_install(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):

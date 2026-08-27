@@ -38,7 +38,7 @@ class SerializationTests(unittest.TestCase):
             multiplexers=(Multiplexer(0x70, 8, 0, ()),),
         )
 
-    @patch("stemma_detect.serialization._installed_version", return_value="3.0.2")
+    @patch("stemma_detect.serialization.driver_version", return_value="3.0.2")
     def test_report_schema_contains_topology_signature_and_driver(self, _version):
         data = report_to_dict(self.report, bus=1)
 
@@ -79,12 +79,19 @@ class SerializationTests(unittest.TestCase):
             },
         )
 
-    @patch("stemma_detect.serialization._installed_version", return_value=None)
+    @patch("stemma_detect.serialization.driver_version", return_value=None)
     def test_report_json_is_parseable_and_marks_missing_driver(self, _version):
         data = json.loads(report_to_json(self.report, bus=1))
 
         self.assertFalse(data["detections"][0]["driver"]["installed"])
         self.assertIsNone(data["detections"][0]["driver"]["version"])
+
+    @patch("stemma_detect.serialization.driver_version", return_value=None)
+    def test_report_convenience_serializers_and_compact_json(self, _version):
+        self.assertEqual(self.report.to_dict(bus=1), report_to_dict(self.report, bus=1))
+        compact = self.report.to_json(bus=1, indent=None)
+        self.assertNotIn("\n", compact)
+        self.assertEqual(json.loads(compact)["bus"], 1)
 
     def test_empty_report_has_stable_collections(self):
         self.assertEqual(

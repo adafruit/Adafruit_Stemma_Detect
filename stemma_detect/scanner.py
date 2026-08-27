@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import errno
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 
-from .bus import I2CBusProtocol
-from .catalog import Chip
+from .bus import I2CBus, I2CBusProtocol, I2CTransaction
+from .catalog import Chip, discover_chips
 from .mux import Multiplexer, MuxHop, discover_multiplexers
 from .result import Confidence, ProbeResult
 
@@ -14,6 +14,8 @@ MAX_MUX_DEPTH = 8
 
 @dataclass(frozen=True)
 class Detection:
+    """One sensor candidate found on an I²C bus or mux channel."""
+
     chip: Chip
     address: int
     result: ProbeResult
@@ -21,11 +23,63 @@ class Detection:
 
     @property
     def name(self) -> str:
+        """Detected variant name, falling back to the catalog family name."""
+
         return self.result.name or self.chip.name
+
+    @property
+    def family(self) -> str:
+        """Catalog driver-family name."""
+
+        return self.chip.name
+
+    @property
+    def confidence(self) -> Confidence:
+        """Whether this is a definitive or possible match."""
+
+        return self.result.confidence
+
+    @property
+    def is_definitive(self) -> bool:
+        """Return whether the signature definitively identifies the driver."""
+
+        return self.confidence is Confidence.MATCH
+
+    @property
+    def driver_package(self) -> str:
+        """PyPI distribution providing the CircuitPython driver."""
+
+        return self.chip.package
+
+    @property
+    def address_hex(self) -> str:
+        """I²C address formatted for display."""
+
+        return f"0x{self.address:02X}"
+
+    @property
+    def evidence(self) -> Mapping[str, str]:
+        """Register values and other evidence returned by the probe."""
+
+        return self.result.evidence
+
+    @property
+    def score(self) -> int | None:
+        """Earned signature score, if the probe uses weighted evidence."""
+
+        return self.result.score
+
+    @property
+    def max_score(self) -> int | None:
+        """Maximum signature score, if the probe uses weighted evidence."""
+
+        return self.result.max_score
 
 
 @dataclass(frozen=True)
 class ProbeDiagnostic:
+    """Result or handled exception from one attempted chip probe."""
+
     chip: Chip
     address: int
     result: ProbeResult | None = None
@@ -50,12 +104,15 @@ class ProbeDiagnostic:
 
 def scan(
     bus: I2CBusProtocol,
-    chips: tuple[Chip, ...],
+    chips: Iterable[Chip],
     *,
     diagnostic: Callable[[ProbeDiagnostic], None] | None = None,
     path: tuple[MuxHop, ...] = (),
     excluded_addresses: frozenset[int] = frozenset(),
 ) -> tuple[Detection, ...]:
+    """Probe one visible I²C segment without traversing multiplexers."""
+
+    chips = tuple(chips)
     detections = []
 
     for address in sorted({address for chip in chips for address in chip.addresses}):
@@ -120,21 +177,59 @@ def scan(
 
 @dataclass(frozen=True)
 class ScanReport:
+    """Structured detections and multiplexer topology from one scan."""
+
     detections: tuple[Detection, ...]
     multiplexers: tuple[Multiplexer, ...] = ()
+
+    def __iter__(self) -> Iterator[Detection]:
+        return iter(self.detections)
+
+    def __len__(self) -> int:
+        return len(self.detections)
+
+    @property
+    def matches(self) -> tuple[Detection, ...]:
+        """Definitive detections whose drivers are safe to install automatically."""
+
+        return tuple(detection for detection in self if detection.is_definitive)
+
+    @property
+    def possible_matches(self) -> tuple[Detection, ...]:
+        """Ambiguous detections that require application or user confirmation."""
+
+        return tuple(detection for detection in self if not detection.is_definitive)
+
+    def to_dict(self, *, bus: int | None = None) -> dict[str, object]:
+        """Return the stable JSON-compatible representation of this report."""
+
+        from .serialization import report_to_dict  # noqa: PLC0415
+
+        return report_to_dict(self, bus=bus)
+
+    def to_json(self, *, bus: int | None = None, indent: int | None = 2) -> str:
+        """Serialize this report using the versioned JSON schema."""
+
+        from .serialization import report_to_json  # noqa: PLC0415
+
+        return report_to_json(self, bus=bus, indent=indent)
 
 
 def scan_all(
     bus: I2CBusProtocol,
-    chips: tuple[Chip, ...],
+    chips: Iterable[Chip] | None = None,
     *,
     diagnostic: Callable[[ProbeDiagnostic], None] | None = None,
     max_mux_depth: int = MAX_MUX_DEPTH,
 ) -> ScanReport:
-    """Scan the root bus and recursively traverse compatible mux channels."""
+    """Scan the root bus and recursively traverse compatible mux channels.
+
+    When *chips* is omitted, the bundled STEMMA QT catalog is used.
+    """
 
     if max_mux_depth < 0:
         raise ValueError("maximum mux depth must not be negative")
+    chips = tuple(discover_chips() if chips is None else chips)
 
     detections, multiplexers = _scan_segment(
         bus,
@@ -146,6 +241,30 @@ def scan_all(
         max_mux_depth=max_mux_depth,
     )
     return ScanReport(tuple(detections), tuple(multiplexers))
+
+
+def detect(
+    bus_number: int = 1,
+    *,
+    chips: Iterable[Chip] | None = None,
+    diagnostic: Callable[[ProbeDiagnostic], None] | None = None,
+    trace: Callable[[I2CTransaction], None] | None = None,
+    max_mux_depth: int = MAX_MUX_DEPTH,
+) -> ScanReport:
+    """Open a Linux I²C bus, scan it, and close it before returning.
+
+    Use :func:`scan_all` instead when the application already owns an open bus
+    object or provides a custom :class:`~stemma_detect.bus.I2CBusProtocol`
+    implementation.
+    """
+
+    with I2CBus(bus_number, trace=trace) as bus:
+        return scan_all(
+            bus,
+            chips,
+            diagnostic=diagnostic,
+            max_mux_depth=max_mux_depth,
+        )
 
 
 def _scan_segment(

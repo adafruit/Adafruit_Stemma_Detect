@@ -52,6 +52,18 @@ class CommandBus:
         return self.responses[command]
 
 
+class StopRegisterBus:
+    def __init__(self, responses):
+        self.responses = responses
+        self.register = None
+
+    def write(self, _address, data):
+        self.register = data[0]
+
+    def read(self, _address, _length):
+        return self.responses[self.register]
+
+
 class ProbeTests(unittest.TestCase):
     def test_crc_protected_command_identities(self):
         def words(*values):
@@ -331,7 +343,13 @@ class ProbeTests(unittest.TestCase):
                 RegisterBus({0x00: b"\x39\x9f", 0x02: b"\x61\xa2"}),
                 0x40,
             ),
+            (
+                "ds3502",
+                RegisterBus({0x00: b"\x40", 0x02: b"\x80"}),
+                0x28,
+            ),
             ("max44009", RegisterBus({0x02: b"\x80", 0x03: b"\x12\x03"}), 0x4A),
+            ("mcp3421", FakeBus(b"\x01\x23\x14\x14"), 0x68),
             ("mpl115a2", FakeBus(b"\x12\x34\x56\x78\x9a\xbc\xde\xf0"), 0x60),
             (
                 "pct2075",
@@ -339,8 +357,13 @@ class ProbeTests(unittest.TestCase):
                 0x37,
             ),
             ("tc74", RegisterBus({0x00: b"\x19", 0x01: b"\x40"}), 0x48),
-            ("lidarlite", FakeBus(b"\x12\x34"), 0x62),
+            (
+                "lidarlite",
+                StopRegisterBus({0x01: b"\x20", 0x16: b"\x12\x34", 0x1E: b"\x00"}),
+                0x62,
+            ),
             ("mlx90393", CommandBus({b"\x50\x90": b"\x03\xb6\x68"}), 0x0C),
+            ("mlx90395", RegisterBus({0x4C: b"\x12\x34\x56\x78\x9a\xbc"}), 0x0C),
             ("mlx90640", CommandBus({b"\x24\x07": b"\x12\x34\x56\x78\x9a\xbc"}), 0x33),
             (
                 "mpr121",
@@ -359,6 +382,11 @@ class ProbeTests(unittest.TestCase):
                 RegisterBus({0x00: b"\x00\x00", 0x03: b"\x00\x00", 0x06: b"\x00\xc0"}),
                 0x10,
             ),
+            (
+                "tsc2007",
+                CommandBus({b"\xc4": b"\x12\x30", b"\xd4": b"\x45\x60", b"\x00": b"\x78\x90"}),
+                0x48,
+            ),
         )
         for name, bus, address in cases:
             module = importlib.import_module(f"stemma_detect.chips.{name}")
@@ -372,7 +400,13 @@ class ProbeTests(unittest.TestCase):
                 RegisterBus({0x00: b"\x00", 0x0B: b"\x01", 0x0C: b"\x00\x00", 0x0E: b"\x00\x00"}),
                 0x36,
             ),
+            (
+                "ds3502",
+                RegisterBus({0x00: b"\xc0", 0x02: b"\x01"}),
+                0x28,
+            ),
             ("ina219", RegisterBus({0x00: b"\x79\x9f", 0x02: b"\x00\x00"}), 0x40),
+            ("mcp3421", FakeBus(b"\x01\x23\x34\x34"), 0x68),
             (
                 "pct2075",
                 RegisterBus({0x00: b"\x19\x01", 0x01: b"\x00", 0x04: b"\x05"}),
@@ -396,11 +430,28 @@ class ProbeTests(unittest.TestCase):
             ),
             ("mprls", FakeBus(b"\x02"), 0x18),
             ("mlx90393", CommandBus({b"\x50\x90": b"\x00\xb6\x68"}), 0x0C),
+            ("mlx90395", RegisterBus({0x4C: bytes(6)}), 0x0C),
+            (
+                "tsc2007",
+                CommandBus({b"\xc4": b"\x12\x31", b"\xd4": b"\x45\x60", b"\x00": b"\x78\x90"}),
+                0x48,
+            ),
         )
         for name, bus, address in cases:
             module = importlib.import_module(f"stemma_detect.chips.{name}")
             with self.subTest(name=name):
                 self.assertIs(module.probe(bus, address).confidence, Confidence.NO_MATCH)
+
+    def test_mcp3421_conversion_framing_for_18_bit_mode(self):
+        module = importlib.import_module("stemma_detect.chips.mcp3421")
+
+        positive = module.probe(FakeBus(b"\x02\x34\x56\x1c"), 0x68)
+        negative = module.probe(FakeBus(b"\xfd\xcb\xaa\x9f"), 0x68)
+        invalid_sign_extension = module.probe(FakeBus(b"\x42\x34\x56\x1c"), 0x68)
+
+        self.assertIs(positive.confidence, Confidence.POSSIBLE)
+        self.assertIs(negative.confidence, Confidence.POSSIBLE)
+        self.assertIs(invalid_sign_extension.confidence, Confidence.NO_MATCH)
 
     def test_as726x_virtual_hardware_identity(self):
         module = importlib.import_module("stemma_detect.chips.as726x")

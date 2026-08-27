@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from importlib.metadata import PackageNotFoundError, version
 
+from .installer import driver_version
 from .mux import MuxHop
 from .scanner import ScanReport
 
@@ -26,18 +26,11 @@ def _path_data(path: tuple[MuxHop, ...]) -> list[dict[str, int | str]]:
     ]
 
 
-def _installed_version(package: str) -> str | None:
-    try:
-        return version(package)
-    except PackageNotFoundError:
-        return None
-
-
 def report_to_dict(report: ScanReport, *, bus: int | None = None) -> dict[str, object]:
     """Convert a scan report to the stable, JSON-compatible output schema."""
 
     package_versions = {
-        detection.chip.package: _installed_version(detection.chip.package)
+        detection.chip.package: driver_version(detection.chip.package)
         for detection in report.detections
     }
     multiplexers = [
@@ -80,7 +73,12 @@ def report_to_dict(report: ScanReport, *, bus: int | None = None) -> dict[str, o
     }
 
 
-def report_to_json(report: ScanReport, *, bus: int | None = None) -> str:
-    """Serialize a scan report as indented JSON."""
+def report_to_json(
+    report: ScanReport,
+    *,
+    bus: int | None = None,
+    indent: int | None = 2,
+) -> str:
+    """Serialize a scan report, optionally changing or disabling indentation."""
 
-    return json.dumps(report_to_dict(report, bus=bus), indent=2)
+    return json.dumps(report_to_dict(report, bus=bus), indent=indent)
