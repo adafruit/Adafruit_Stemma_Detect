@@ -153,6 +153,19 @@ Applications that already own an I²C connection can pass any object implementin
 
     report = scan_all(my_i2c_bus)
 
+Blinka ``busio.I2C`` objects are adapted automatically, without making Blinka a dependency of
+STEMMA Detect:
+
+.. code-block:: python
+
+    import board
+    from stemma_detect import scan_all
+
+    i2c = board.I2C()
+    report = scan_all(i2c)
+
+``scan_all`` borrows the supplied bus and does not close or deinitialize it.
+
 Pass ``chips=discover_chips()`` explicitly only when filtering or extending the catalog. Both
 ``detect`` and ``scan_all`` accept ``diagnostic=callback`` for applications that need every probe
 outcome.

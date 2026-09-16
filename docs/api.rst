@@ -32,6 +32,20 @@ Use :func:`~stemma_detect.scanner.scan_all` when the application owns the bus or
 
    report = scan_all(existing_bus)
 
+Blinka ``busio.I2C`` objects can be passed directly and are adapted without adding Blinka as a
+package dependency:
+
+.. code-block:: python
+
+   import board
+   from stemma_detect import scan_all
+
+   i2c = board.I2C()
+   report = scan_all(i2c)
+
+The supplied bus remains owned by the application and is not closed or deinitialized by
+``scan_all``.
+
 Reports can be serialized directly with :meth:`~stemma_detect.scanner.ScanReport.to_dict` or
 :meth:`~stemma_detect.scanner.ScanReport.to_json`. These classes and functions are re-exported from
 the top-level ``stemma_detect`` package as shown above.

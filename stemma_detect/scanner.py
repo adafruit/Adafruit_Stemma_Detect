@@ -4,7 +4,7 @@ import errno
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 
-from .bus import I2CBus, I2CBusProtocol, I2CTransaction
+from .bus import BusioI2CProtocol, I2CBus, I2CBusProtocol, I2CTransaction, adapt_i2c_bus
 from .catalog import Chip, discover_chips
 from .mux import Multiplexer, MuxHop, discover_multiplexers
 from .result import Confidence, ProbeResult
@@ -103,7 +103,7 @@ class ProbeDiagnostic:
 
 
 def scan(
-    bus: I2CBusProtocol,
+    bus: I2CBusProtocol | BusioI2CProtocol,
     chips: Iterable[Chip],
     *,
     diagnostic: Callable[[ProbeDiagnostic], None] | None = None,
@@ -112,6 +112,7 @@ def scan(
 ) -> tuple[Detection, ...]:
     """Probe one visible I²C segment without traversing multiplexers."""
 
+    bus = adapt_i2c_bus(bus)
     chips = tuple(chips)
     detections = []
 
@@ -216,7 +217,7 @@ class ScanReport:
 
 
 def scan_all(
-    bus: I2CBusProtocol,
+    bus: I2CBusProtocol | BusioI2CProtocol,
     chips: Iterable[Chip] | None = None,
     *,
     diagnostic: Callable[[ProbeDiagnostic], None] | None = None,
@@ -224,11 +225,13 @@ def scan_all(
 ) -> ScanReport:
     """Scan the root bus and recursively traverse compatible mux channels.
 
-    When *chips* is omitted, the bundled STEMMA QT catalog is used.
+    Blinka ``busio.I2C`` objects are adapted automatically. When *chips* is
+    omitted, the bundled STEMMA QT catalog is used.
     """
 
     if max_mux_depth < 0:
         raise ValueError("maximum mux depth must not be negative")
+    bus = adapt_i2c_bus(bus)
     chips = tuple(discover_chips() if chips is None else chips)
 
     detections, multiplexers = _scan_segment(

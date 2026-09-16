@@ -1,7 +1,14 @@
 """Adafruit STEMMA QT sensor detection."""
 
 from ._version import __version__
-from .bus import I2CBus, I2CBusProtocol, I2CTransaction
+from .bus import (
+    BusioI2CAdapter,
+    BusioI2CProtocol,
+    I2CBus,
+    I2CBusProtocol,
+    I2CTransaction,
+    adapt_i2c_bus,
+)
 from .catalog import Chip, discover_chips
 from .installer import (
     InstallOutcome,
@@ -19,6 +26,8 @@ from .serialization import SCHEMA_VERSION, report_to_dict, report_to_json
 
 __all__ = (
     "Chip",
+    "BusioI2CAdapter",
+    "BusioI2CProtocol",
     "Confidence",
     "Detection",
     "I2CBus",
@@ -36,6 +45,7 @@ __all__ = (
     "PossibleMatchConfirmation",
     "SCHEMA_VERSION",
     "ScanReport",
+    "adapt_i2c_bus",
     "discover_chips",
     "detect",
     "create_install_plan",
