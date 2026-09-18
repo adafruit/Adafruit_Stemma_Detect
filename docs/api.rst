@@ -70,7 +70,8 @@ distinct:
    results = install_drivers(plan)
 
 Definitive detections are always included. Unconfirmed possible detections are omitted, conflicting
-confirmations at one physical location are rejected, and packages are deduplicated.
+confirmations at one physical location are rejected, and packages are deduplicated. Detected
+compatible multiplexers add one ``adafruit-circuitpython-tca9548a`` package to the plan.
 
 Bus
 ---
