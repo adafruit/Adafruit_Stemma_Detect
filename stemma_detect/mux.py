@@ -20,6 +20,12 @@ class Multiplexer:
     def name(self) -> str:
         return "pca9546" if self.channels == 4 else "pca9548"
 
+    @property
+    def driver_package(self) -> str:
+        """PyPI distribution supporting this compatible multiplexer."""
+
+        return "adafruit-circuitpython-tca9548a"
+
     def select(self, bus: I2CBusProtocol, channel: int) -> None:
         if not 0 <= channel < self.channels:
             raise ValueError("multiplexer channel is out of range")

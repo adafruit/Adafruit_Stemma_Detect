@@ -11,7 +11,7 @@ from stemma_detect.installer import (
     install,
     install_drivers,
 )
-from stemma_detect.mux import MuxHop
+from stemma_detect.mux import Multiplexer, MuxHop
 from stemma_detect.result import Confidence, ProbeResult
 from stemma_detect.scanner import Detection, ScanReport
 
@@ -97,6 +97,19 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0].detections, (first, second))
 
+    @patch("stemma_detect.installer.driver_version", return_value=None)
+    def test_plan_includes_one_driver_for_detected_multiplexers(self, version):
+        first = Multiplexer(0x70, 8, 0)
+        second = Multiplexer(0x71, 4, 0)
+
+        plan = create_install_plan(ScanReport((), (first, second)))
+
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0].package, "adafruit-circuitpython-tca9548a")
+        self.assertEqual(plan[0].detections, ())
+        self.assertEqual(plan[0].multiplexers, (first, second))
+        version.assert_called_once_with("adafruit-circuitpython-tca9548a")
+
     @patch("stemma_detect.installer.driver_version", return_value="1.2.3")
     def test_plan_reports_installed_version(self, _version):
         plan = create_install_plan(ScanReport((_detection(),)))
@@ -139,6 +152,24 @@ class InstallerTests(unittest.TestCase):
                 call("adafruit-circuitpython-broken"),
             ],
         )
+
+    def test_install_result_retains_multiplexer_sources(self):
+        mux = Multiplexer(0x70, 8, 0)
+        plan = (
+            InstallPlanItem(
+                "adafruit-circuitpython-tca9548a",
+                (),
+                multiplexers=(mux,),
+            ),
+        )
+
+        with (
+            patch("stemma_detect.installer._install_package"),
+            patch("stemma_detect.installer.driver_version", return_value="1.0.0"),
+        ):
+            results = install_drivers(plan)
+
+        self.assertEqual(results[0].multiplexers, (mux,))
 
 
 if __name__ == "__main__":

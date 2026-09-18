@@ -203,6 +203,10 @@ Packages shared by multiple detected sensors are deduplicated. ``install_drivers
 or prompt; it returns an ``InstallResult`` for each package with an ``InstallOutcome`` of
 ``INSTALLED``, ``ALREADY_INSTALLED`` or ``FAILED``.
 
+When compatible multiplexers are present, the plan also includes the
+``adafruit-circuitpython-tca9548a`` package. One package entry covers all detected four- and
+eight-channel multiplexers.
+
 JSON output
 ===========
 

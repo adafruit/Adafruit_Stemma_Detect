@@ -8,7 +8,7 @@ from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
 
 from .catalog import PACKAGE_PATTERN, Chip
-from .mux import MuxHop
+from .mux import Multiplexer, MuxHop
 from .scanner import Detection, ScanReport
 
 PossibleMatchConfirmation = Callable[[Detection], bool]
@@ -24,11 +24,12 @@ class InstallOutcome(str, Enum):
 
 @dataclass(frozen=True)
 class InstallPlanItem:
-    """One deduplicated CircuitPython package in an installation plan."""
+    """One deduplicated CircuitPython package and the hardware requiring it."""
 
     package: str
     detections: tuple[Detection, ...]
     installed_version: str | None = None
+    multiplexers: tuple[Multiplexer, ...] = ()
 
     @property
     def needs_install(self) -> bool:
@@ -46,6 +47,7 @@ class InstallResult:
     outcome: InstallOutcome
     version: str | None = None
     error: str | None = None
+    multiplexers: tuple[Multiplexer, ...] = ()
 
 
 def driver_version(package: str) -> str | None:
@@ -62,12 +64,13 @@ def create_install_plan(
     *,
     confirm_possible: PossibleMatchConfirmation | None = None,
 ) -> tuple[InstallPlanItem, ...]:
-    """Plan driver installations for definitive and explicitly confirmed matches.
+    """Plan driver installations for detected sensors and multiplexers.
 
-    ``confirm_possible`` is called only for possible detections. It should return
-    true when the application knows that candidate is present. If it confirms
-    multiple candidates at the same address and mux path, planning fails rather
-    than choosing one based on ordering.
+    Definitive sensor matches and compatible multiplexers are included
+    automatically. ``confirm_possible`` is called only for possible sensor
+    detections. It should return true when the application knows that candidate
+    is present. If it confirms multiple candidates at the same address and mux
+    path, planning fails rather than choosing one based on ordering.
     """
 
     selected: list[Detection] = []
@@ -92,9 +95,19 @@ def create_install_plan(
     for detection in selected:
         grouped.setdefault(detection.driver_package, []).append(detection)
 
+    mux_grouped: dict[str, list[Multiplexer]] = {}
+    for mux in report.multiplexers:
+        mux_grouped.setdefault(mux.driver_package, []).append(mux)
+
+    packages = dict.fromkeys((*grouped, *mux_grouped))
     return tuple(
-        InstallPlanItem(package, tuple(detections), driver_version(package))
-        for package, detections in grouped.items()
+        InstallPlanItem(
+            package,
+            tuple(grouped.get(package, ())),
+            driver_version(package),
+            tuple(mux_grouped.get(package, ())),
+        )
+        for package in packages
     )
 
 
@@ -114,6 +127,7 @@ def install_drivers(plan: Iterable[InstallPlanItem]) -> tuple[InstallResult, ...
                     item.detections,
                     InstallOutcome.ALREADY_INSTALLED,
                     version=item.installed_version,
+                    multiplexers=item.multiplexers,
                 )
             )
             continue
@@ -126,6 +140,7 @@ def install_drivers(plan: Iterable[InstallPlanItem]) -> tuple[InstallResult, ...
                     item.detections,
                     InstallOutcome.FAILED,
                     error=str(error),
+                    multiplexers=item.multiplexers,
                 )
             )
             continue
@@ -135,6 +150,7 @@ def install_drivers(plan: Iterable[InstallPlanItem]) -> tuple[InstallResult, ...
                 item.detections,
                 InstallOutcome.INSTALLED,
                 version=driver_version(item.package),
+                multiplexers=item.multiplexers,
             )
         )
     return tuple(results)

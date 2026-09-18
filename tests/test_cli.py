@@ -15,7 +15,7 @@ from stemma_detect.cli import (
     main,
 )
 from stemma_detect.installer import InstallOutcome, InstallPlanItem, InstallResult
-from stemma_detect.mux import MuxHop
+from stemma_detect.mux import Multiplexer, MuxHop
 from stemma_detect.result import Confidence, ProbeResult, ProbeRisk
 from stemma_detect.scanner import Detection, ProbeDiagnostic, ScanReport
 
@@ -119,6 +119,38 @@ class CliTests(unittest.TestCase):
             (detection,),
             InstallOutcome.INSTALLED,
             version="1.0.0",
+        )
+        with (
+            patch("stemma_detect.cli._arguments", return_value=arguments),
+            patch("stemma_detect.cli.I2CBus"),
+            patch("stemma_detect.cli.scan_all", return_value=report),
+            patch("stemma_detect.cli.driver_version", return_value=None),
+            patch("stemma_detect.cli.create_install_plan", return_value=(item,)) as planner,
+            patch("stemma_detect.cli.install_drivers", return_value=(result,)) as installer,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(main(), 0)
+
+        planner.assert_called_once()
+        installer.assert_called_once_with((item,))
+
+    def test_install_mode_plans_driver_when_only_mux_is_detected(self):
+        arguments = Namespace(
+            bus=1,
+            diagnostics=False,
+            install=True,
+            prompt_possible_matches=False,
+            json=False,
+        )
+        mux = Multiplexer(0x70, 8, 0)
+        report = ScanReport((), (mux,))
+        item = InstallPlanItem(mux.driver_package, (), multiplexers=(mux,))
+        result = InstallResult(
+            mux.driver_package,
+            (),
+            InstallOutcome.INSTALLED,
+            version="1.0.0",
+            multiplexers=(mux,),
         )
         with (
             patch("stemma_detect.cli._arguments", return_value=arguments),

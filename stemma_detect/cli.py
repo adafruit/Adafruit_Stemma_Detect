@@ -156,27 +156,31 @@ def main() -> int:
             f"MUX: {mux.name.upper()} at 0x{mux.address:02X}"
             f"{_path_text(mux.path)} ({mux.channels} channels)"
         )
+        installed = driver_version(mux.driver_package)
+        if installed:
+            print(f"  driver: {mux.driver_package} {installed} (installed)")
+        else:
+            print(f"  driver: {mux.driver_package} (not installed)")
 
     if not detections:
         print("No supported Adafruit STEMMA QT sensors detected.")
-        return 0
-
-    for detection in detections:
-        label = "MATCH" if detection.result.confidence is Confidence.MATCH else "POSSIBLE"
-        print(
-            f"{label}: {detection.name.upper()} at 0x{detection.address:02X}"
-            f"{_path_text(detection.path)}"
-        )
-        if detection.result.evidence or detection.result.score is not None:
-            fields = [f"{key}={value}" for key, value in detection.result.evidence.items()]
-            if detection.result.score is not None:
-                fields.append(f"score={detection.result.score}/{detection.result.max_score}")
-            print(f"  {', '.join(fields)}")
-        installed = driver_version(detection.chip.package)
-        if installed:
-            print(f"  driver: {detection.chip.package} {installed} (installed)")
-        else:
-            print(f"  driver: {detection.chip.package} (not installed)")
+    else:
+        for detection in detections:
+            label = "MATCH" if detection.result.confidence is Confidence.MATCH else "POSSIBLE"
+            print(
+                f"{label}: {detection.name.upper()} at 0x{detection.address:02X}"
+                f"{_path_text(detection.path)}"
+            )
+            if detection.result.evidence or detection.result.score is not None:
+                fields = [f"{key}={value}" for key, value in detection.result.evidence.items()]
+                if detection.result.score is not None:
+                    fields.append(f"score={detection.result.score}/{detection.result.max_score}")
+                print(f"  {', '.join(fields)}")
+            installed = driver_version(detection.chip.package)
+            if installed:
+                print(f"  driver: {detection.chip.package} {installed} (installed)")
+            else:
+                print(f"  driver: {detection.chip.package} (not installed)")
 
     if args.install:
         plan = create_install_plan(
