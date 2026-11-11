@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shlex
+import subprocess
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -168,7 +169,10 @@ def _install_package(package: str) -> None:
     if not PACKAGE_PATTERN.fullmatch(package):
         raise ValueError(f"Refusing untrusted package name: {package!r}")
 
-    command = shlex.join([sys.executable, "-m", "pip", "install", package])
+    arguments = [sys.executable, "-m", "pip", "install", package]
+    command = (
+        subprocess.list2cmdline(arguments) if sys.platform == "win32" else shlex.join(arguments)
+    )
     if not _run_command(command):
         raise RuntimeError(f"Driver installation failed: {package}")
 

@@ -1,14 +1,18 @@
 import contextlib
 import io
+import json
+import sys
+import types
 import unittest
 from argparse import Namespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from stemma_detect.bus import I2CTransaction
+from stemma_detect.bus import BusioI2CAdapter, I2CTransaction
 from stemma_detect.catalog import Chip
 from stemma_detect.cli import (
     _arguments,
     _confirm_possible,
+    _open_bus,
     _print_diagnostic,
     _print_transaction,
     _refine_possible_matches,
@@ -66,6 +70,114 @@ def _ranked_possible_detection(default_address):
 
 
 class CliTests(unittest.TestCase):
+    def test_backend_arguments(self):
+        self.assertTrue(_arguments(["--blinka"]).blinka)
+        self.assertFalse(_arguments([]).blinka)
+        self.assertEqual(_arguments([]).bus, 1)
+        self.assertEqual(_arguments(["--bus", "0"]).bus, 0)
+        self.assertEqual(_arguments(["--bus", "2"]).bus, 2)
+
+    def test_blinka_rejects_numbered_bus(self):
+        for arguments in (
+            ("--blinka", "--bus", "1"),
+            ("--bus", "1", "--blinka"),
+            ("--blinka", "--bus=1"),
+            ("--bus", "2", "--blinka"),
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                _arguments(arguments)
+
+    def test_linux_backend_does_not_import_blinka(self):
+        trace = Mock()
+        with (
+            patch.dict(sys.modules, {"board": None}),
+            patch("stemma_detect.cli.I2CBus") as native_bus,
+        ):
+            with _open_bus(2, blinka=False, trace=trace) as bus:
+                self.assertIs(bus, native_bus.return_value.__enter__.return_value)
+
+        native_bus.assert_called_once_with(2, trace=trace)
+        native_bus.return_value.__exit__.assert_called_once()
+
+    def test_blinka_bus_is_deinitialized_after_success_and_failure(self):
+        for fails in (False, True):
+            with self.subTest(fails=fails):
+                raw_bus = Mock()
+                board = types.SimpleNamespace(I2C=Mock(return_value=raw_bus))
+                with (
+                    patch.dict(sys.modules, {"board": board}),
+                    patch("stemma_detect.cli.I2CBus") as native_bus,
+                ):
+                    if fails:
+                        with self.assertRaisesRegex(RuntimeError, "scan failed"):
+                            with _open_bus(1, blinka=True):
+                                raise RuntimeError("scan failed")
+                    else:
+                        with _open_bus(1, blinka=True) as bus:
+                            self.assertIsInstance(bus, BusioI2CAdapter)
+
+                board.I2C.assert_called_once_with()
+                raw_bus.deinit.assert_called_once_with()
+                native_bus.assert_not_called()
+
+    def test_missing_blinka_explains_installation(self):
+        with (
+            patch.dict(sys.modules, {"board": None}),
+            self.assertRaisesRegex(RuntimeError, r"adafruit-stemma-detect\[blinka\]"),
+        ):
+            with _open_bus(1, blinka=True):
+                self.fail("missing Blinka must not yield a bus")
+
+    def test_blinka_json_has_no_linux_bus_number(self):
+        raw_bus = Mock()
+        board = types.SimpleNamespace(I2C=Mock(return_value=raw_bus))
+        output = io.StringIO()
+        with (
+            patch("stemma_detect.cli._arguments", return_value=_arguments(["--blinka", "--json"])),
+            patch.dict(sys.modules, {"board": board}),
+            patch("stemma_detect.cli.scan_all", return_value=ScanReport(())) as scan_all_mock,
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(main(), 0)
+
+        self.assertIsNone(json.loads(output.getvalue())["bus"])
+        self.assertIsInstance(scan_all_mock.call_args.args[0], BusioI2CAdapter)
+        raw_bus.deinit.assert_called_once_with()
+
+    def test_blinka_diagnostics_include_transactions_and_probe_results(self):
+        raw_bus = Mock()
+        raw_bus.readfrom_into.side_effect = lambda _address, buffer: buffer.__setitem__(
+            slice(None), b"\x5a"
+        )
+        board = types.SimpleNamespace(I2C=Mock(return_value=raw_bus))
+        detection = _matched_detection()
+
+        def scan_bus(bus, *, diagnostic):
+            bus.read(0x44, 1)
+            diagnostic(ProbeDiagnostic(detection.chip, 0x44, detection.result))
+            return ScanReport((detection,))
+
+        output = io.StringIO()
+        with (
+            patch(
+                "stemma_detect.cli._arguments",
+                return_value=_arguments(["--blinka", "--diagnostics"]),
+            ),
+            patch.dict(sys.modules, {"board": board}),
+            patch("stemma_detect.cli.scan_all", side_effect=scan_bus),
+            patch("stemma_detect.cli.driver_version", return_value=None),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(main(), 0)
+
+        self.assertIn("I2C: 0x44 read=5A", output.getvalue())
+        self.assertIn("PROBE: MATCHED-CHIP at 0x44 [register]: MATCH", output.getvalue())
+        raw_bus.deinit.assert_called_once_with()
+
     def test_diagnostics_argument(self):
         self.assertTrue(_arguments(["--diagnostics"]).diagnostics)
 
@@ -84,6 +196,7 @@ class CliTests(unittest.TestCase):
     def test_json_mode_prints_only_serialized_report(self):
         arguments = Namespace(
             bus=1,
+            blinka=False,
             diagnostics=False,
             install=False,
             prompt_possible_matches=False,
@@ -106,6 +219,7 @@ class CliTests(unittest.TestCase):
     def test_install_mode_uses_public_plan_api(self):
         arguments = Namespace(
             bus=1,
+            blinka=False,
             diagnostics=False,
             install=True,
             prompt_possible_matches=False,
@@ -137,6 +251,7 @@ class CliTests(unittest.TestCase):
     def test_install_mode_plans_driver_when_only_mux_is_detected(self):
         arguments = Namespace(
             bus=1,
+            blinka=False,
             diagnostics=False,
             install=True,
             prompt_possible_matches=False,

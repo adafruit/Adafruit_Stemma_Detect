@@ -96,6 +96,35 @@ class _FakeScanningBusioI2C(_FakeBusioI2C):
 
 
 class BusioI2CAdapterTests(unittest.TestCase):
+    def test_successful_busio_transfers_are_traced(self):
+        transactions = []
+        bus = BusioI2CAdapter(_FakeBusioI2C(), trace=transactions.append)
+
+        bus.read(0x44, 2)
+        bus.write(0x44, b"\x10\x20")
+        bus.read_register(0x44, 0x0F, 2)
+
+        self.assertEqual(
+            transactions,
+            [
+                I2CTransaction(0x44, read=b"\x01\x02"),
+                I2CTransaction(0x44, write=b"\x10\x20"),
+                I2CTransaction(0x44, write=b"\x0f", read=b"\xa0\xa1"),
+            ],
+        )
+
+    def test_failed_busio_transfer_is_not_traced(self):
+        transactions = []
+        raw_bus = _FakeBusioI2C()
+        raw_bus.fail_transfers = True
+        bus = BusioI2CAdapter(raw_bus, trace=transactions.append)
+
+        with self.assertRaises(OSError):
+            bus.read(0x44, 1)
+
+        self.assertEqual(transactions, [])
+        self.assertFalse(raw_bus.locked)
+
     def test_busio_transfers_are_adapted(self):
         raw_bus = _FakeBusioI2C()
         bus = BusioI2CAdapter(raw_bus)

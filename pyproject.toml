@@ -9,8 +9,8 @@ description = "Detect supported Adafruit STEMMA QT sensors and install their Cir
 readme = "README.rst"
 requires-python = ">=3.10"
 dependencies = [
-    "Adafruit-Python-Shell>=1.14.0",
-    "smbus2>=0.4",
+    "Adafruit-Python-Shell>=1.14.0; sys_platform != 'win32'",
+    "smbus2>=0.4; sys_platform == 'linux'",
 ]
 authors = [
     {name = "Adafruit Industries", email = "circuitpython@adafruit.com"},
@@ -28,6 +28,8 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: System :: Hardware",
@@ -40,6 +42,9 @@ Issues = "https://github.com/adafruit/Adafruit_Stemma_Detect/issues"
 Source = "https://github.com/adafruit/Adafruit_Stemma_Detect"
 
 [project.optional-dependencies]
+blinka = [
+    "Adafruit-Blinka",
+]
 dev = [
     "build>=1.2",
     "pre-commit>=4",

@@ -1,4 +1,5 @@
 import shlex
+import subprocess
 import sys
 import unittest
 from unittest.mock import call, patch
@@ -50,10 +51,23 @@ class InstallerTests(unittest.TestCase):
         with patch("stemma_detect.installer._run_command", return_value=True) as run:
             install(_chip())
 
-        command = shlex.join(
-            [sys.executable, "-m", "pip", "install", "adafruit-circuitpython-test"]
+        arguments = [sys.executable, "-m", "pip", "install", "adafruit-circuitpython-test"]
+        command = (
+            subprocess.list2cmdline(arguments) if sys.platform == "win32" else shlex.join(arguments)
         )
         run.assert_called_once_with(command)
+
+    def test_windows_install_quotes_python_path_with_spaces(self):
+        with (
+            patch("stemma_detect.installer.sys.platform", "win32"),
+            patch("stemma_detect.installer.sys.executable", r"C:\Program Files\Python\python.exe"),
+            patch("stemma_detect.installer._run_command", return_value=True) as run,
+        ):
+            install(_chip())
+
+        run.assert_called_once_with(
+            r'"C:\Program Files\Python\python.exe" -m pip install adafruit-circuitpython-test'
+        )
 
     def test_install_failure_is_reported(self):
         with (
