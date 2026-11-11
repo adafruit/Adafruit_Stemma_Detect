@@ -30,7 +30,7 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Detect supported Adafruit STEMMA QT sensors",
     )
     backend = parser.add_mutually_exclusive_group()
-    backend.add_argument("--bus", type=int, default=1, help="Linux I2C bus number (default: 1)")
+    backend.add_argument("--bus", type=int, help="Linux I2C bus number (default: 1)")
     backend.add_argument(
         "--blinka",
         action="store_true",
@@ -57,6 +57,10 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="write the scan report as machine-readable JSON",
     )
     args = parser.parse_args(argv)
+    # Older argparse versions overlook conflicting options equal to their default.
+    # Apply the bus default only after the mutually exclusive group is validated.
+    if args.bus is None:
+        args.bus = 1
     if args.prompt_possible_matches and not args.install:
         parser.error("--prompt-possible-matches requires --install")
     if args.json and args.install:

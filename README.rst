@@ -101,7 +101,7 @@ Possible candidates using their default address are prompted before candidates u
 address. The prompt labels the address as default or alternate when that information is known.
 
 Using the CLI with Blinka and FT232H
-==================================
+====================================
 
 Use ``--blinka`` to scan Blinka's ``board.I2C()`` bus instead of a numbered Linux I²C bus.
 This supports USB adapters such as FT232H on macOS, Linux, and Windows using Blinka's

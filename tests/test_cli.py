@@ -70,13 +70,20 @@ def _ranked_possible_detection(default_address):
 
 
 class CliTests(unittest.TestCase):
-    def test_blinka_argument(self):
+    def test_backend_arguments(self):
         self.assertTrue(_arguments(["--blinka"]).blinka)
         self.assertFalse(_arguments([]).blinka)
         self.assertEqual(_arguments([]).bus, 1)
+        self.assertEqual(_arguments(["--bus", "0"]).bus, 0)
+        self.assertEqual(_arguments(["--bus", "2"]).bus, 2)
 
     def test_blinka_rejects_numbered_bus(self):
-        for arguments in (("--blinka", "--bus", "1"), ("--bus", "2", "--blinka")):
+        for arguments in (
+            ("--blinka", "--bus", "1"),
+            ("--bus", "1", "--blinka"),
+            ("--blinka", "--bus=1"),
+            ("--bus", "2", "--blinka"),
+        ):
             with (
                 self.subTest(arguments=arguments),
                 contextlib.redirect_stderr(io.StringIO()),
