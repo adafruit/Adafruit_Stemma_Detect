@@ -33,11 +33,14 @@ Definitions may optionally express a device signature with the helpers in
 an exact chip ID, reserved-bit patterns, revision values, and nonblank factory calibration data.
 Checks carry weights so results can expose both a categorical confidence and an evidence score.
 
-The scanner uses ``smbus2`` for I²C access and Adafruit Python Shell for prompts and streaming installation commands. Individual CircuitPython drivers are imported neither by the scanner nor by chip definitions.
+The scanner uses ``smbus2`` for native Linux I²C access or an optional Blinka bus, including USB
+adapters such as FT232H. Adafruit Python Shell handles prompts and streaming installation commands
+on macOS and Linux; Windows uses Python's standard library for those operations. Individual
+CircuitPython drivers are imported neither by the scanner nor by chip definitions.
 
 Dependencies
 =============
-This driver depends on:
+Native Linux scanning uses ``smbus2``. On macOS and Linux, prompts and installation commands use:
 
 * `Adafruit Python Shell <https://github.com/adafruit/Adafruit_Python_Shell>`_
 
@@ -96,6 +99,52 @@ The complete scan finishes before any prompts are shown. Definitive-capable prob
 
 Possible candidates using their default address are prompted before candidates using an alternate
 address. The prompt labels the address as default or alternate when that information is known.
+
+Using the CLI with Blinka and FT232H
+==================================
+
+Use ``--blinka`` to scan Blinka's ``board.I2C()`` bus instead of a numbered Linux I²C bus.
+This supports USB adapters such as FT232H on macOS, Linux, and Windows using Blinka's
+platform-specific USB setup. First follow the
+`FT232H setup guide <https://learn.adafruit.com/circuitpython-on-any-computer-with-ft232h/setup>`_
+for your operating system and configure the board for I²C operation.
+
+Install the optional Blinka dependencies in your active virtual environment:
+
+.. code-block:: shell
+
+    python -m pip install "adafruit-stemma-detect[blinka]"
+
+When running from a checkout, use ``python -m pip install -e ".[blinka]"`` instead.
+
+On macOS or Linux, select the FT232H backend before scanning:
+
+.. code-block:: shell
+
+    export BLINKA_FT232H=1
+    stemma-scan --blinka
+
+In Windows PowerShell:
+
+.. code-block:: powershell
+
+    $env:BLINKA_FT232H = "1"
+    stemma-scan --blinka
+
+The ``--blinka`` flag uses whichever board Blinka selects; it does not select FT232H by itself.
+The default backend remains Linux I²C bus 1. ``--blinka`` and ``--bus`` cannot be combined.
+Blinka is optional and is not imported when using the Linux backend.
+
+All scan options, including automatic multiplexer traversal, remain available:
+
+.. code-block:: shell
+
+    stemma-scan --blinka --diagnostics
+    stemma-scan --blinka --json
+    stemma-scan --blinka --install --prompt-possible-matches
+
+JSON output uses ``"bus": null`` for Blinka because there is no numbered Linux bus.
+The CLI deinitializes its Blinka bus after scanning, before any installation prompts.
 
 Multiplexers
 ============

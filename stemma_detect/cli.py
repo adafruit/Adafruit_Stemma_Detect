@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 
-from .bus import I2CBus, I2CTransaction
+from .bus import BusioI2CAdapter, I2CBus, I2CBusProtocol, I2CTransaction
 from .installer import InstallOutcome, create_install_plan, driver_version, install_drivers
 from .mux import MuxHop
 from .result import Confidence
@@ -28,7 +29,13 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Detect supported Adafruit STEMMA QT sensors",
     )
-    parser.add_argument("--bus", type=int, default=1, help="Linux I2C bus number")
+    backend = parser.add_mutually_exclusive_group()
+    backend.add_argument("--bus", type=int, default=1, help="Linux I2C bus number (default: 1)")
+    backend.add_argument(
+        "--blinka",
+        action="store_true",
+        help="use Blinka's board.I2C() bus, including USB adapters such as FT232H",
+    )
     parser.add_argument(
         "--install",
         action="store_true",
@@ -57,6 +64,34 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.json and args.diagnostics:
         parser.error("--json cannot be combined with --diagnostics")
     return args
+
+
+@contextmanager
+def _open_bus(
+    bus_number: int,
+    *,
+    blinka: bool,
+    trace: Callable[[I2CTransaction], None] | None = None,
+) -> Iterator[I2CBusProtocol]:
+    if not blinka:
+        with I2CBus(bus_number, trace=trace) as bus:
+            yield bus
+        return
+
+    try:
+        import board  # noqa: PLC0415
+    except ImportError as exc:
+        raise RuntimeError(
+            "Could not import Blinka. Install it with: "
+            'python -m pip install "adafruit-stemma-detect[blinka]". '
+            "USB adapters also require the platform setup described in Adafruit's Blinka guides."
+        ) from exc
+
+    raw_bus = board.I2C()
+    try:
+        yield BusioI2CAdapter(raw_bus, trace=trace)
+    finally:
+        raw_bus.deinit()
 
 
 def _confirm_possible(detection: Detection) -> bool:
@@ -133,8 +168,9 @@ def _refine_possible_matches(
 
 def main() -> int:
     args = _arguments()
-    with I2CBus(
+    with _open_bus(
         args.bus,
+        blinka=args.blinka,
         trace=_print_transaction if args.diagnostics else None,
     ) as bus:
         report = scan_all(
@@ -144,7 +180,7 @@ def main() -> int:
         detections = report.detections
 
     if args.json:
-        print(report_to_json(report, bus=args.bus))
+        print(report_to_json(report, bus=None if args.blinka else args.bus))
         return 0
 
     confirmed_possible = set()

@@ -57,8 +57,18 @@ class BusioI2CProtocol(Protocol):
 class BusioI2CAdapter:
     """Adapt a Blinka ``busio.I2C`` object for sensor probes."""
 
-    def __init__(self, bus: BusioI2CProtocol):
+    def __init__(
+        self,
+        bus: BusioI2CProtocol,
+        *,
+        trace: Callable[[I2CTransaction], None] | None = None,
+    ):
         self._bus = bus
+        self._trace = trace
+
+    def _record(self, transaction: I2CTransaction) -> None:
+        if self._trace:
+            self._trace(transaction)
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
@@ -85,17 +95,22 @@ class BusioI2CAdapter:
                 self._bus.readfrom_into(address, response)
             else:
                 self._bus.writeto_then_readfrom(address, write, response)
-        return bytes(response)
+        data = bytes(response)
+        self._record(I2CTransaction(address, write=write, read=data))
+        return data
 
     def read(self, address: int, length: int) -> bytes:
         response = bytearray(length)
         with self._locked():
             self._bus.readfrom_into(address, response)
-        return bytes(response)
+        data = bytes(response)
+        self._record(I2CTransaction(address, read=data))
+        return data
 
     def write(self, address: int, data: bytes) -> None:
         with self._locked():
             self._bus.writeto(address, data)
+        self._record(I2CTransaction(address, write=data))
 
     def read_register(self, address: int, register: int, length: int) -> bytes:
         return self.write_then_read(address, bytes((register,)), length)
